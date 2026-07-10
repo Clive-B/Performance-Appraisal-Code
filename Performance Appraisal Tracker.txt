@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
     <!-- Add jsPDF and html2canvas libraries -->
-    <script type="text/javascript" src="https://gc.kes.v2.scr.kaspersky-labs.com/7EA5E9BB-55E1-4C31-9C21-4943DDFED2E4/main.js?attr=mem6KGOMKUa2UB1YrhwfX-_Rd1ew-a453fsTGtFSwxZdthL28q7gzkJEWyTqenspMhXOVTMygzVHMtOTYgOAqDNfywVROLrUBXXvV7PBcY_HbLLTZ7fNPAvwyVivW6pwOS0UTLeW1BLuJTYw4XIepxgr2nal4ZaNNyHW7jljArG7RiitxLxqtB1VYDbondOO3uazkxUqZutg1UhxH14t9ZZveVrTk3ImmqDzKdxE-BVGQkE_wbdwZWxZJcHFelvEKZaWgbcQU0Pk3GVJHWEQlA" charset="UTF-8"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <!-- Add Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
@@ -1979,33 +1979,8 @@
                     <label for="signup-confirm-password">Confirm Password</label>
                     <input type="password" id="signup-confirm-password" required placeholder="Confirm your password">
                 </div>
-                
-                <!-- Secret Question Section -->
-                <div class="form-group">
-                    <label for="signup-secret-question">Security Question</label>
-                    <select id="signup-secret-question" required>
-                        <option value="">Select a security question</option>
-                        <option value="What was your first pet's name?">What was your first pet's name?</option>
-                        <option value="What city were you born in?">What city were you born in?</option>
-                        <option value="What is your mother's maiden name?">What is your mother's maiden name?</option>
-                        <option value="What was your childhood nickname?">What was your childhood nickname?</option>
-                        <option value="What is the name of your favorite teacher?">What is the name of your favorite teacher?</option>
-                        <option value="What is your favorite movie?">What is your favorite movie?</option>
-                        <option value="What was the make of your first car?">What was the make of your first car?</option>
-                        <option value="What is the name of your favorite childhood friend?">What is the name of your favorite childhood friend?</option>
-                        <option value="custom">Enter my own question</option>
-                    </select>
-                </div>
-                
-                <div class="form-group" id="custom-question-group" style="display: none;">
-                    <label for="signup-custom-question">Your Security Question</label>
-                    <input type="text" id="signup-custom-question" placeholder="Enter your security question">
-                </div>
-                
-                <div class="form-group">
-                    <label for="signup-secret-answer">Security Answer</label>
-                    <input type="text" id="signup-secret-answer" required placeholder="Enter answer to security question">
-                    <small style="color: #7f8c8d; display: block; margin-top: 5px;">This will be used for account recovery</small>
+                <div class="form-group auth-recovery-note">
+                    <small>Account recovery uses Firebase password reset by email. Security answers are not collected or stored.</small>
                 </div>
                 
                 <button type="button" class="auth-btn" onclick="signup()">Create Account</button>
@@ -2206,7 +2181,7 @@
             </div>
             
             <div class="footer">
-                <p>Mid-Year Objectives Dashboard • Last updated: <span id="current-date"></span></p>
+                <p>Mid-Year Objectives Dashboard - Last updated: <span id="current-date"></span></p>
                 <p>Click the edit icon (<i class="fas fa-edit" style="color: var(--secondary-color);"></i>) to edit objective titles and status, note icon (<i class="fas fa-sticky-note"></i>) to add dated notes, paperclip icon (<i class="fas fa-paperclip"></i>) to attach evidence files, edit icon (<i class="fas fa-edit"></i>) to edit tasks, and trash icon (<i class="fas fa-trash"></i>) to delete tasks.</p>
             </div>
             
@@ -2242,7 +2217,7 @@
                         <button id="calendar-next"><i class="fas fa-chevron-right"></i></button>
                     </div>
                     <div class="calendar-month-year" id="calendar-month-year">June 2024</div>
-                    <button id="calendar-close" style="background: none; border: none; cursor: pointer; font-size: 1.2rem;">×</button>
+                    <button id="calendar-close" style="background: none; border: none; cursor: pointer; font-size: 1.2rem;">Ã—</button>
                 </div>
                 <div class="calendar-weekdays">
                     <div>Sun</div>
@@ -2308,10 +2283,10 @@
                             <label style="display: block; margin-bottom: 5px; font-weight: 600;">Page Size:</label>
                             <div>
                                 <select id="page-size" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 4px;">
-                                    <option value="a4">A4 (210mm × 297mm)</option>
-                                    <option value="letter">Letter (8.5in × 11in)</option>
-                                    <option value="legal">Legal (8.5in × 14in)</option>
-                                    <option value="a3">A3 (297mm × 420mm)</option>
+                                    <option value="a4">A4 (210mm Ã— 297mm)</option>
+                                    <option value="letter">Letter (8.5in Ã— 11in)</option>
+                                    <option value="legal">Legal (8.5in Ã— 14in)</option>
+                                    <option value="a3">A3 (297mm Ã— 420mm)</option>
                                 </select>
                             </div>
                         </div>
@@ -2472,18 +2447,6 @@
             document.getElementById('auth-success').style.display = 'none';
         }
 
-        // Handle custom secret question
-        document.getElementById('signup-secret-question').addEventListener('change', function() {
-            const customQuestionGroup = document.getElementById('custom-question-group');
-            if (this.value === 'custom') {
-                customQuestionGroup.style.display = 'block';
-                document.getElementById('signup-custom-question').required = true;
-            } else {
-                customQuestionGroup.style.display = 'none';
-                document.getElementById('signup-custom-question').required = false;
-            }
-        });
-
         function showAuthError(message) {
             const errorElement = document.getElementById('auth-error');
             errorElement.textContent = message;
@@ -2510,11 +2473,8 @@
             const email = document.getElementById('signup-email').value.trim().toLowerCase();
             const pass = document.getElementById('signup-password').value;
             const confirm = document.getElementById('signup-confirm-password').value;
-            const secretQuestion = document.getElementById('signup-secret-question').value;
-            let finalSecretQuestion = secretQuestion;
-            const secretAnswer = document.getElementById('signup-secret-answer').value.trim();
 
-            if (!name || !email || !pass || !confirm || !secretQuestion || !secretAnswer) {
+            if (!name || !email || !pass || !confirm) {
                 return showAuthError("All fields are required");
             }
 
@@ -2526,15 +2486,6 @@
                 return showAuthError("Password must be at least 6 characters");
             }
 
-            // Handle custom question
-            if (secretQuestion === 'custom') {
-                const customQuestion = document.getElementById('signup-custom-question').value.trim();
-                if (!customQuestion) {
-                    return showAuthError("Please enter your custom security question");
-                }
-                finalSecretQuestion = customQuestion;
-            }
-
             try {
                 // 1. Create Firebase Authentication user
                 const userCredential = await auth.createUserWithEmailAndPassword(email, pass);
@@ -2544,8 +2495,6 @@
                 await db.collection('users').doc(user.uid).set({
                     name: name,
                     email: email,
-                    secretQuestion: finalSecretQuestion,
-                    secretAnswer: secretAnswer.toLowerCase(),
                     createdAt: new Date().toISOString(),
                     isAdmin: email === ADMIN_EMAIL.toLowerCase()
                 });
@@ -2977,7 +2926,15 @@
                 notification.classList.remove('show');
             }, 3000);
         }
+        function escapeHTML(value) {
+            return String(value ?? '').replace(/[&<>"']/g, function (char) {
+                return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]);
+            });
+        }
 
+        function escapeAttribute(value) {
+            return escapeHTML(value).replace(/`/g, '&#96;');
+        }
         // Render objectives based on current filter
         function renderObjectives() {
             const container = document.getElementById('objectives-container');
@@ -3036,8 +2993,8 @@
             
             card.innerHTML = `
                 <div class="card-header">
-                    <div class="objective-title">${getObjectiveDisplayTitle(objective)}</div>
-                    <input type="text" class="objective-title-input" value="${getObjectiveEditTitle(objective)}">
+                    <div class="objective-title">${escapeHTML(getObjectiveDisplayTitle(objective))}</div>
+                    <input type="text" class="objective-title-input" value="${escapeAttribute(getObjectiveEditTitle(objective))}">
                     
                     <div class="status-badge ${statusClass}">${statusText}</div>
                     <select class="status-select">
@@ -3117,7 +3074,7 @@
             const notesHTML = hasNotes ? task.notes.map((note, noteIndex) => `
                 <div class="note-item">
                     <div class="note-header">
-                        <span class="note-date">${formatDate(note.date)}</span>
+                        <span class="note-date">${escapeHTML(formatDate(note.date))}</span>
                         <div>
                             <button class="edit-note-btn" title="Edit Note" data-task-index="${index}" data-task-type="${type}" data-objective-id="${objectiveId}" data-note-index="${noteIndex}">
                                 <i class="fas fa-edit"></i>
@@ -3127,21 +3084,21 @@
                             </button>
                         </div>
                     </div>
-                    <div class="note-text">${note.text}</div>
+                    <div class="note-text">${escapeHTML(note.text)}</div>
                 </div>
             `).join('') : '';
             
             const attachmentsHTML = hasAttachments ? task.attachments.map(attachment => `
                 <div class="attachment-item">
                     <div class="attachment-header">
-                        <span class="attachment-name">${attachment.name}</span>
+                        <span class="attachment-name">${escapeHTML(attachment.name)}</span>
                         <button class="delete-attachment-btn" data-task-index="${index}" data-task-type="${type}" data-objective-id="${objectiveId}" data-attachment-index="${task.attachments.indexOf(attachment)}">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
                     <div class="attachment-info">
                         <span class="attachment-size">${formatFileSize(attachment.size)}</span>
-                        <button class="view-attachment-btn" data-file="${attachment.data}" data-filename="${attachment.name}">
+                        <button class="view-attachment-btn" data-file="${escapeAttribute(attachment.data)}" data-filename="${escapeAttribute(attachment.name)}">
                             <i class="fas fa-eye"></i> View
                         </button>
                     </div>
@@ -3151,7 +3108,7 @@
             const taskOwners = Array.isArray(task.owners) ? task.owners.filter(Boolean) : (task.ownerName ? [task.ownerName] : []);
             const taskOwnersHTML = taskOwners.length ? `
                 <div class="task-owner-meta" style="font-size:0.78rem;color:#64748b;margin-top:4px;font-weight:600;">
-                    <i class="fas fa-users"></i> ${taskOwners.map(owner => (typeof htmlEscape === 'function' ? htmlEscape(owner) : owner)).join(', ')}
+                    <i class="fas fa-users"></i> ${taskOwners.map(owner => escapeHTML(owner)).join(', ')}
                 </div>
             ` : '';
 
@@ -3161,9 +3118,9 @@
                         <input type="checkbox" class="task-checkbox" ${task.completed ? 'checked' : ''} 
                                data-task-index="${index}" data-task-type="${type}" data-objective-id="${objectiveId}">
                         <div class="task-text-container">
-                            <div class="task-text">${task.text}</div>
+                            <div class="task-text">${escapeHTML(task.text)}</div>
                             ${taskOwnersHTML}
-                            <input type="text" class="task-text-input" value="${task.text}">
+                            <input type="text" class="task-text-input" value="${escapeAttribute(task.text)}">
                         </div>
                         <div class="task-actions">
                             <button class="task-action-btn edit-task-btn" title="Edit Task">
@@ -3524,8 +3481,8 @@
                 content.innerHTML = `
                     <div class="due-notes-summary">
                         ${dueNotes.length} due note${dueNotes.length === 1 ? '' : 's'} found after sign-in
-                        ${overdueCount ? ` • ${overdueCount} overdue` : ''}
-                        ${dueTodayCount ? ` • ${dueTodayCount} due today` : ''}
+                        ${overdueCount ? ` - ${overdueCount} overdue` : ''}
+                        ${dueTodayCount ? ` - ${dueTodayCount} due today` : ''}
                     </div>
                     <div class="due-notes-list">
                         ${dueNotes.map(item => `
@@ -3537,10 +3494,10 @@
                                     </span>
                                 </div>
                                 <div class="due-note-meta">
-                                    <strong>Task:</strong> ${item.taskText}<br>
+                                    <strong>Task:</strong> ${escapeHTML(item.taskText)}<br>
                                     <strong>Due:</strong> ${formatDate(item.dueDate)}
                                 </div>
-                                <div class="due-note-text"><strong>Note:</strong> ${item.noteText}</div>
+                                <div class="due-note-text"><strong>Note:</strong> ${escapeHTML(item.noteText)}</div>
                             </div>
                         `).join('')}
                     </div>
@@ -4948,11 +4905,11 @@
             pdf.setFont('helvetica', 'normal');
             
             const summaryLines = [
-                `• Total Objectives: ${objectivesData.length}`,
-                `• Overall Progress: ${overallProgress}%`,
-                `• Completed Tasks: ${completedTasks} of ${totalTasks}`,
-                `• Objectives Status: ${completedCount} Completed, ${inProgressCount} In Progress, ${notStartedCount} Not Started`,
-                `• Total Attachments: ${totalAttachments} evidence files`
+                `- Total Objectives: ${objectivesData.length}`,
+                `- Overall Progress: ${overallProgress}%`,
+                `- Completed Tasks: ${completedTasks} of ${totalTasks}`,
+                `- Objectives Status: ${completedCount} Completed, ${inProgressCount} In Progress, ${notStartedCount} Not Started`,
+                `- Total Attachments: ${totalAttachments} evidence files`
             ];
             
             summaryLines.forEach(line => {
@@ -5029,7 +4986,7 @@
                         pdf.text('NCA Performance Dashboard', margin, margin - 5);
                     }
                     
-                    const checkbox = action.completed ? '✓' : '□';
+                    const checkbox = action.completed ? 'âœ“' : 'â–¡';
                     const actionText = `  ${checkbox} ${action.text}`;
                     const splitAction = pdf.splitTextToSize(actionText, contentWidth - 10);
                     pdf.text(splitAction, margin + 5, currentY);
@@ -5040,7 +4997,7 @@
                         pdf.setFontSize(9);
                         pdf.setFont('helvetica', 'italic');
                         action.notes.forEach(note => {
-                            const noteText = `    • ${formatDate(note.date)}: ${note.text}`;
+                            const noteText = `    - ${formatDate(note.date)}: ${note.text}`;
                             const splitNote = pdf.splitTextToSize(noteText, contentWidth - 15);
                             pdf.text(splitNote, margin + 10, currentY);
                             currentY += (splitNote.length * 4.5) + 1;
@@ -5073,7 +5030,7 @@
                         pdf.text('NCA Performance Dashboard', margin, margin - 5);
                     }
                     
-                    const checkbox = kpi.completed ? '✓' : '□';
+                    const checkbox = kpi.completed ? 'âœ“' : 'â–¡';
                     const kpiText = `  ${checkbox} ${kpi.text}`;
                     const splitKpi = pdf.splitTextToSize(kpiText, contentWidth - 10);
                     pdf.text(splitKpi, margin + 5, currentY);
@@ -5084,7 +5041,7 @@
                         pdf.setFontSize(9);
                         pdf.setFont('helvetica', 'italic');
                         kpi.notes.forEach(note => {
-                            const noteText = `    • ${formatDate(note.date)}: ${note.text}`;
+                            const noteText = `    - ${formatDate(note.date)}: ${note.text}`;
                             const splitNote = pdf.splitTextToSize(noteText, contentWidth - 15);
                             pdf.text(splitNote, margin + 10, currentY);
                             currentY += (splitNote.length * 4.5) + 1;
@@ -5408,7 +5365,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function createUnitFromModal(){ const division=document.getElementById('org-unit-division').value; const name=document.getElementById('org-new-unit-name').value.trim(); if(!division || !name)return showNotification('Select a division and enter a unit name.'); await upsertUnit(division,name); document.getElementById('org-new-unit-name').value=''; await refreshOrgUnitsList(); await populateUnitSelect('org-assign-unit', document.getElementById('org-assign-division').value); showNotification('Unit created successfully.'); }
     async function refreshOrgUnitsList(){ const division=document.getElementById('org-unit-division').value; const list=document.getElementById('org-units-list'); if(!list)return; const units=await getUnitsForDivision(division); if(!units.length){ list.innerHTML='<div class="org-list-item">No units yet.</div>'; return;} list.innerHTML=units.map(u=>'<div class="org-list-item"><div><strong>'+htmlEscape(u.name)+'</strong><small>'+htmlEscape(u.division)+'</small></div><button class="org-mini-btn danger" data-archive-unit="'+htmlEscape(u.docId)+'">Archive</button></div>').join(''); list.querySelectorAll('[data-archive-unit]').forEach(btn=>btn.addEventListener('click',async()=>{ await db.collection('units').doc(btn.getAttribute('data-archive-unit')).set({active:false,archivedAt:new Date().toISOString()},{merge:true}); await refreshOrgUnitsList(); showNotification('Unit archived.'); })); }
     async function openOrganizationManagement(){ const profile=await getCurrentProfile(); if(!canManageOrg(profile)) return showNotification('Only Divisional Heads and System Admins can manage units.'); populateDivisionSelect('org-unit-division', profile.isAdmin?'RIPS':(profile.division||'RIPS')); populateDivisionSelect('org-assign-division', profile.isAdmin?'RIPS':(profile.division||'RIPS')); if(!profile.isAdmin && profile.division){ document.getElementById('org-unit-division').value=profile.division; document.getElementById('org-assign-division').value=profile.division;} await populateUnitSelect('org-assign-unit', document.getElementById('org-assign-division').value); await refreshUsersForAssignment(profile); await refreshOrgUnitsList(); await refreshOrphanUsers(); document.getElementById('organization-modal').classList.add('show'); }
-    async function refreshUsersForAssignment(profile){ const select=document.getElementById('org-user-search'); if(!select)return; select.innerHTML='<option>Loading users...</option>'; const snap=await db.collection('users').get(); const users=[]; snap.forEach(doc=>{const u=Object.assign({uid:doc.id},doc.data()); if(profile.isAdmin || !profile.division || u.division===profile.division || !u.division) users.push(u);}); users.sort((a,b)=>String(a.name||a.email).localeCompare(String(b.name||b.email))); select.innerHTML=users.map(u=>'<option value="'+u.uid+'">'+htmlEscape(u.name || u.email)+' — '+htmlEscape(u.division || 'Unassigned')+' / '+htmlEscape(u.unit || 'No unit')+'</option>').join(''); }
+    async function refreshUsersForAssignment(profile){ const select=document.getElementById('org-user-search'); if(!select)return; select.innerHTML='<option>Loading users...</option>'; const snap=await db.collection('users').get(); const users=[]; snap.forEach(doc=>{const u=Object.assign({uid:doc.id},doc.data()); if(profile.isAdmin || !profile.division || u.division===profile.division || !u.division) users.push(u);}); users.sort((a,b)=>String(a.name||a.email).localeCompare(String(b.name||b.email))); select.innerHTML=users.map(u=>'<option value="'+u.uid+'">'+htmlEscape(u.name || u.email)+' - '+htmlEscape(u.division || 'Unassigned')+' / '+htmlEscape(u.unit || 'No unit')+'</option>').join(''); }
     async function refreshOrphanUsers(){ const list=document.getElementById('org-orphan-users'); if(!list)return; const snap=await db.collection('users').get(); const orphan=[]; snap.forEach(doc=>{const u=Object.assign({uid:doc.id},doc.data()); if(!u.division || !u.unit) orphan.push(u);}); if(!orphan.length){list.innerHTML='<div class="org-list-item">No unassigned users.</div>'; return;} list.innerHTML=orphan.map(u=>'<div class="org-list-item"><div><strong>'+htmlEscape(u.name || 'Unnamed User')+'</strong><small>'+htmlEscape(u.email || '')+'</small></div><button class="org-mini-btn" data-pick-user="'+u.uid+'">Assign</button></div>').join(''); list.querySelectorAll('[data-pick-user]').forEach(btn=>btn.addEventListener('click',()=>{document.getElementById('org-user-search').value=btn.getAttribute('data-pick-user');})); }
     async function assignUserFromModal(){ const uid=document.getElementById('org-user-search').value; const division=document.getElementById('org-assign-division').value; const unit=document.getElementById('org-assign-unit').value; const role=document.getElementById('org-assign-role').value || 'employee'; if(!uid || !division || !unit)return showNotification('Select a user, division, and unit.'); await db.collection('users').doc(uid).set({division,divisionId:safeId(division),unit,unitId:safeId(division+'-'+unit),role,profileCompleted:true,orgUpdatedAt:new Date().toISOString()},{merge:true}); await refreshUsersForAssignment(await getCurrentProfile()); await refreshOrphanUsers(); await refreshOrgLabels(); showNotification('User assignment updated.'); }
     async function collectDashboardDocsForUsers(users){
@@ -5572,7 +5529,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const title=card.querySelector('.objective-title');
             if(obj && title && !title.querySelector('.objective-owner-label')){
                 const label=obj.ownerSummary || (obj.ownerName ? obj.ownerName : '');
-                if(label) title.insertAdjacentHTML('beforeend',' <span class="objective-owner-label"><i class="fas fa-users"></i> '+htmlEscape(label)+(obj.ownerUnit ? ' • '+htmlEscape(obj.ownerUnit) : '')+'</span>');
+                if(label) title.insertAdjacentHTML('beforeend',' <span class="objective-owner-label"><i class="fas fa-users"></i> '+htmlEscape(label)+(obj.ownerUnit ? ' - '+htmlEscape(obj.ownerUnit) : '')+'</span>');
             }
         });
     }
@@ -5593,438 +5550,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-
-<!-- Final Bulletproof Register / Change Division & Unit Fix -->
-<script>
-(function(){
-  'use strict';
-
-  const NCA_DIVISIONS_FINAL = [
-    'RIPS','Internal Audit','Administration','Legal','Engineering','IT','Cybersecurity','Protocol & Procurement',
-    'Consumer','Corporate','Regulatory Administration','Regional Operations','Human Resource','Finance','International Affairs',
-    'DG Secretariat','DDG-TO Secretariat','DDG-MO Secretariat'
-  ];
-  const DEFAULT_UNITS_FINAL = {
-    'RIPS': ['Innovation','Research','Data and Analytics','Strategy','Policy']
-  };
-  const ROLE_LABELS_FINAL = {
-    employee: 'Employee',
-    unitLead: 'Unit Lead',
-    divisionalHead: 'Divisional Head',
-    systemAdmin: 'System Administrator'
-  };
-
-  let autoPromptShown = false;
-
-  function getDbFinal(){
-    try {
-      if (window.firebase && firebase.firestore) return firebase.firestore();
-    } catch(e) {}
-    return null;
-  }
-
-  function getAuthUserFinal(){
-    try {
-      return window.firebase && firebase.auth ? firebase.auth().currentUser : null;
-    } catch(e) {
-      return null;
-    }
-  }
-
-  function isPrimaryAdminFinal(){
-    const user = getAuthUserFinal();
-    if (user && String(user.email || '').toLowerCase() === 'admin@nca.gov') return true;
-    try {
-      const stored = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
-      return String(stored.email || '').toLowerCase() === 'admin@nca.gov';
-    } catch(e) { return false; }
-  }
-
-  function safeIdFinal(value){
-    return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
-  }
-
-  function escFinal(value){
-    return String(value || '').replace(/[&<>'"]/g, function(c){
-      return {'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c];
-    });
-  }
-
-  function notifyFinal(message){
-    try {
-      if (typeof showNotification === 'function') {
-        showNotification(message);
-        return;
-      }
-    } catch(e) {}
-    alert(message);
-  }
-
-  function removeDuplicateRegisterButtonsFinal(){
-    const buttons = Array.from(document.querySelectorAll('button'))
-      .filter(btn => (btn.textContent || '').replace(/\s+/g,' ').trim().toLowerCase().includes('register / change division'));
-
-    if (!buttons.length) return null;
-
-    const keeper = buttons[0];
-    buttons.slice(1).forEach(btn => btn.remove());
-    keeper.id = 'registerOrgBtn';
-    keeper.type = 'button';
-    keeper.classList.add('action-btn');
-    keeper.setAttribute('data-open-org-profile', 'true');
-    keeper.onclick = function(event){
-      event.preventDefault();
-      event.stopPropagation();
-      openOrgProfileModalFinal();
-      return false;
-    };
-    return keeper;
-  }
-
-  function ensureRegisterButtonFinal(){
-    if (isPrimaryAdminFinal()) {
-      const existingAdminBtn = removeDuplicateRegisterButtonsFinal();
-      if (existingAdminBtn) existingAdminBtn.style.display = 'none';
-      return existingAdminBtn;
-    }
-    let existing = removeDuplicateRegisterButtonsFinal();
-    if (existing) return existing;
-
-    const controls = document.querySelector('.view-controls') || document.querySelector('.controls');
-    if (!controls) return null;
-
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.id = 'registerOrgBtn';
-    btn.className = 'action-btn';
-    btn.setAttribute('data-open-org-profile', 'true');
-    btn.innerHTML = '<i class="fas fa-id-card"></i> Register / Change Division & Unit';
-    btn.onclick = function(event){
-      event.preventDefault();
-      event.stopPropagation();
-      openOrgProfileModalFinal();
-      return false;
-    };
-
-    const unitBtn = document.getElementById('unitDashboardBtn');
-    if (unitBtn && unitBtn.parentElement === controls) {
-      controls.insertBefore(btn, unitBtn);
-    } else {
-      controls.insertBefore(btn, controls.firstChild);
-    }
-    return btn;
-  }
-
-  function ensureOrgLabelsFinal(){
-    const headerLeft = document.querySelector('.header-left');
-    if (!headerLeft) return;
-    let panel = document.getElementById('org-meta-panel');
-    if (!panel) {
-      panel = document.createElement('div');
-      panel.id = 'org-meta-panel';
-      panel.className = 'org-meta-panel';
-      panel.innerHTML = '<span class="org-meta-badge"><i class="fas fa-building"></i><span id="divisionLabel">Division: Unassigned</span></span><span class="org-meta-badge"><i class="fas fa-users"></i><span id="unitLabel">Unit: Unassigned</span></span><span class="org-meta-badge"><i class="fas fa-user-shield"></i><span id="roleLabel">Role: Employee</span></span>';
-      const subtitle = headerLeft.querySelector('.subtitle');
-      if (subtitle) subtitle.insertAdjacentElement('afterend', panel);
-      else headerLeft.appendChild(panel);
-    }
-  }
-
-  function ensureModalFinal(){
-    // Use a new unique modal ID so older broken modal code cannot interfere.
-    let modal = document.getElementById('nca-org-profile-modal');
-    if (modal) return modal;
-
-    const old = document.getElementById('org-assignment-modal');
-    if (old) old.remove();
-
-    document.body.insertAdjacentHTML('beforeend', `
-      <div class="modal-overlay" id="nca-org-profile-modal" style="z-index:5000;">
-        <div class="modal" style="max-width:640px;">
-          <h3><i class="fas fa-id-badge"></i> Register / Change Division & Unit</h3>
-          <div style="background:#fff8e1;border-left:4px solid #f39c12;padding:12px 14px;border-radius:8px;margin-bottom:18px;color:#2c3e50;">
-            Select your division and unit. You may return here later to change them.
-          </div>
-          <div class="form-group">
-            <label for="nca-profile-division">Division</label>
-            <select id="nca-profile-division"></select>
-          </div>
-          <div class="form-group">
-            <label for="nca-profile-unit">Unit</label>
-            <select id="nca-profile-unit"></select>
-            <small style="color:#64748b;display:block;margin-top:5px;">For divisions without existing units, type a new unit below.</small>
-          </div>
-          <div class="form-group">
-            <label for="nca-profile-new-unit">Create / Request New Unit (optional)</label>
-            <input id="nca-profile-new-unit" placeholder="Type a new unit name if it is not listed">
-          </div>
-          <div class="form-group">
-            <label for="nca-profile-role">Role</label>
-            <select id="nca-profile-role">
-              <option value="employee">Employee</option>
-              <option value="unitLead">Unit Lead</option>
-              <option value="divisionalHead">Divisional Head</option>
-            </select>
-          </div>
-          <div class="modal-buttons">
-            <button type="button" class="modal-btn secondary" id="nca-profile-cancel">Cancel</button>
-            <button type="button" class="modal-btn primary" id="nca-profile-save">Save Assignment</button>
-          </div>
-        </div>
-      </div>
-    `);
-
-    modal = document.getElementById('nca-org-profile-modal');
-    document.getElementById('nca-profile-cancel').onclick = function(){ closeOrgProfileModalFinal(); };
-    document.getElementById('nca-profile-save').onclick = function(event){ event.preventDefault(); saveOrgProfileFinal(); };
-    document.getElementById('nca-profile-division').onchange = function(){ populateUnitSelectFinal(this.value, ''); };
-    return modal;
-  }
-
-  async function seedDefaultUnitsFinal(){
-    const db = getDbFinal();
-    if (!db) return;
-    for (const division of Object.keys(DEFAULT_UNITS_FINAL)) {
-      for (const unitName of DEFAULT_UNITS_FINAL[division]) {
-        const id = safeIdFinal(division + '-' + unitName);
-        await db.collection('units').doc(id).set({
-          id: id,
-          name: unitName,
-          division: division,
-          divisionId: safeIdFinal(division),
-          active: true,
-          defaultUnit: true,
-          createdBy: 'system-seed',
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-      }
-    }
-  }
-
-  async function getProfileFinal(){
-    const db = getDbFinal();
-    const authUser = getAuthUserFinal();
-    if (!db || !authUser) return null;
-    const snap = await db.collection('users').doc(authUser.uid).get();
-    const profile = snap.exists ? Object.assign({uid: authUser.uid, email: authUser.email || ''}, snap.data()) : {uid: authUser.uid, email: authUser.email || ''};
-    const email = String(profile.email || authUser.email || '').toLowerCase();
-    if (email === 'admin@nca.gov') {
-      profile.email = email;
-      profile.isAdmin = true;
-      profile.role = 'systemAdmin';
-      profile.division = '';
-      profile.unit = '';
-      profile.profileCompleted = true;
-    }
-    return profile;
-  }
-
-  function populateDivisionSelectFinal(selected){
-    const select = document.getElementById('nca-profile-division');
-    if (!select) return;
-    select.innerHTML = '<option value="">Select division</option>' + NCA_DIVISIONS_FINAL.map(function(d){
-      return '<option value="'+escFinal(d)+'" '+(d === selected ? 'selected' : '')+'>'+escFinal(d)+'</option>';
-    }).join('');
-  }
-
-  async function getUnitsFinal(division){
-    if (!division) return [];
-    const db = getDbFinal();
-    if (!db) return [];
-    await seedDefaultUnitsFinal();
-    const snap = await db.collection('units').where('division','==',division).get();
-    const units = [];
-    snap.forEach(function(doc){
-      const data = doc.data() || {};
-      if (data.active !== false && data.name) units.push(data.name);
-    });
-    return Array.from(new Set(units)).sort();
-  }
-
-  async function populateUnitSelectFinal(division, selected){
-    const select = document.getElementById('nca-profile-unit');
-    if (!select) return;
-    select.innerHTML = '<option value="">Loading units...</option>';
-    const units = await getUnitsFinal(division);
-    if (!units.length) {
-      select.innerHTML = '<option value="">No units yet — type a new unit below</option>';
-      return;
-    }
-    select.innerHTML = '<option value="">Select unit</option>' + units.map(function(unit){
-      return '<option value="'+escFinal(unit)+'" '+(unit === selected ? 'selected' : '')+'>'+escFinal(unit)+'</option>';
-    }).join('');
-  }
-
-  async function openOrgProfileModalFinal(){
-    if (isPrimaryAdminFinal()) {
-      notifyFinal('Admin account has organization-wide access and does not need division/unit assignment.');
-      return false;
-    }
-    const authUser = getAuthUserFinal();
-    if (!authUser) {
-      notifyFinal('Please sign in first, then register your division and unit.');
-      return;
-    }
-    ensureOrgLabelsFinal();
-    ensureRegisterButtonFinal();
-    const modal = ensureModalFinal();
-    const profile = await getProfileFinal();
-    const division = profile && profile.division ? profile.division : '';
-    const unit = profile && profile.unit ? profile.unit : '';
-    const role = profile && profile.role ? profile.role : 'employee';
-    populateDivisionSelectFinal(division);
-    await populateUnitSelectFinal(division || 'RIPS', unit);
-    const roleSelect = document.getElementById('nca-profile-role');
-    if (roleSelect) roleSelect.value = role;
-    const newUnit = document.getElementById('nca-profile-new-unit');
-    if (newUnit) newUnit.value = '';
-    modal.classList.add('show');
-  }
-
-  function closeOrgProfileModalFinal(){
-    const modal = document.getElementById('nca-org-profile-modal');
-    if (modal) modal.classList.remove('show');
-  }
-
-  async function saveOrgProfileFinal(){
-    const db = getDbFinal();
-    const authUser = getAuthUserFinal();
-    if (!db || !authUser) {
-      notifyFinal('Please sign in before saving.');
-      return;
-    }
-
-    const division = document.getElementById('nca-profile-division')?.value || '';
-    let unit = document.getElementById('nca-profile-unit')?.value || '';
-    const newUnit = (document.getElementById('nca-profile-new-unit')?.value || '').trim();
-    const role = document.getElementById('nca-profile-role')?.value || 'employee';
-
-    if (!division) {
-      notifyFinal('Please select a division.');
-      return;
-    }
-    if (newUnit) unit = newUnit;
-    if (!unit) {
-      notifyFinal('Please select a unit or type a new unit name.');
-      return;
-    }
-
-    const unitId = safeIdFinal(division + '-' + unit);
-    if (newUnit) {
-      await db.collection('units').doc(unitId).set({
-        id: unitId,
-        name: unit,
-        division: division,
-        divisionId: safeIdFinal(division),
-        active: true,
-        createdBy: authUser.uid,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-    }
-
-    await db.collection('users').doc(authUser.uid).set({
-      uid: authUser.uid,
-      email: authUser.email || '',
-      division: division,
-      divisionId: safeIdFinal(division),
-      unit: unit,
-      unitId: unitId,
-      role: role,
-      profileCompleted: true,
-      orgUpdatedAt: new Date().toISOString()
-    }, { merge: true });
-
-    try {
-      const current = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
-      sessionStorage.setItem('currentUser', JSON.stringify(Object.assign({}, current, {division, unit, role, profileCompleted:true})));
-    } catch(e) {}
-
-    updateOrgLabelsFinal({division, unit, role});
-    closeOrgProfileModalFinal();
-    notifyFinal('Division and unit saved successfully.');
-  }
-
-  function updateOrgLabelsFinal(profile){
-    ensureOrgLabelsFinal();
-    const divLabel = document.getElementById('divisionLabel');
-    const unitLabel = document.getElementById('unitLabel');
-    const roleLabel = document.getElementById('roleLabel');
-    const isPrimaryAdmin = isPrimaryAdminFinal() || String((profile && profile.email) || '').toLowerCase() === 'admin@nca.gov';
-    if (divLabel) divLabel.textContent = 'Division: ' + (isPrimaryAdmin ? 'All Divisions' : (profile.division || 'Unassigned'));
-    if (unitLabel) unitLabel.textContent = 'Unit: ' + (isPrimaryAdmin ? 'All Units' : (profile.unit || 'Unassigned'));
-    if (roleLabel) roleLabel.textContent = 'Role: ' + (ROLE_LABELS_FINAL[profile.role] || (isPrimaryAdmin ? 'System Administrator' : 'Employee'));
-  }
-
-  async function refreshLabelsFromFirestoreFinal(){
-    const authUser = getAuthUserFinal();
-    if (!authUser) return;
-    const profile = await getProfileFinal();
-    if (profile) updateOrgLabelsFinal(profile);
-  }
-
-  async function maybeAutoPromptFinal(){
-    if (autoPromptShown) return;
-    const authUser = getAuthUserFinal();
-    if (!authUser) return;
-    if (isPrimaryAdminFinal()) return;
-    const profile = await getProfileFinal();
-    if (!profile || !profile.division || !profile.unit) {
-      autoPromptShown = true;
-      setTimeout(openOrgProfileModalFinal, 600);
-    }
-  }
-
-  function bindFinal(){
-    ensureOrgLabelsFinal();
-    ensureRegisterButtonFinal();
-    removeDuplicateRegisterButtonsFinal();
-    ensureModalFinal();
-
-    // Capture phase catches the button even if older scripts also attached broken handlers.
-    document.addEventListener('click', function(event){
-      const btn = event.target && event.target.closest ? event.target.closest('[data-open-org-profile="true"], #registerOrgBtn') : null;
-      if (btn) {
-        event.preventDefault();
-        event.stopPropagation();
-        event.stopImmediatePropagation();
-        openOrgProfileModalFinal();
-        return false;
-      }
-    }, true);
-
-    window.openProfileAssignmentModal = openOrgProfileModalFinal;
-    window.saveProfileAssignment = saveOrgProfileFinal;
-    window.NCA_ORG_PROFILE = {
-      open: openOrgProfileModalFinal,
-      save: saveOrgProfileFinal,
-      refreshLabels: refreshLabelsFromFirestoreFinal
-    };
-  }
-
-  function bootFinal(){
-    bindFinal();
-    refreshLabelsFromFirestoreFinal();
-    maybeAutoPromptFinal();
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', bootFinal);
-  } else {
-    bootFinal();
-  }
-
-  let attempts = 0;
-  const interval = setInterval(function(){
-    attempts++;
-    ensureOrgLabelsFinal();
-    ensureRegisterButtonFinal();
-    removeDuplicateRegisterButtonsFinal();
-    refreshLabelsFromFirestoreFinal();
-    maybeAutoPromptFinal();
-    if (attempts > 25) clearInterval(interval);
-  }, 1000);
-})();
-</script>
 
 
 <!-- HARD FIX: Working Register / Change Division & Unit Button -->
@@ -6197,7 +5722,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     if (!units.length) {
-      sel.innerHTML = '<option value="">No unit listed yet — type new unit below</option>';
+      sel.innerHTML = '<option value="">No unit listed yet - type new unit below</option>';
       return;
     }
     sel.innerHTML = '<option value="">Select unit</option>' + units.map(function(u){

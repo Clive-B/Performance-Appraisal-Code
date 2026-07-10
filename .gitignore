@@ -1,0 +1,4 @@
+backups/
+*.log
+.firebase/
+.firebaserc.local

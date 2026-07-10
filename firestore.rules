@@ -1,0 +1,82 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc(uid) {
+      return get(/databases/$(database)/documents/users/$(uid));
+    }
+
+    function currentProfile() {
+      return userDoc(request.auth.uid).data;
+    }
+
+    function isPrimaryAdmin() {
+      return signedIn() && request.auth.token.email == 'admin@nca.gov';
+    }
+
+    function isSystemAdmin() {
+      return signedIn() && (isPrimaryAdmin() || currentProfile().role == 'systemAdmin' || currentProfile().isAdmin == true);
+    }
+
+    function sameDivision(division) {
+      return signedIn() && currentProfile().division == division;
+    }
+
+    function sameUnit(division, unit) {
+      return signedIn() && currentProfile().division == division && currentProfile().unit == unit;
+    }
+
+    function canManageDivision(division) {
+      return isSystemAdmin() || (sameDivision(division) && currentProfile().role in ['divisionalHead', 'director']);
+    }
+
+    function canReadOrgProfile(profile) {
+      return isSystemAdmin()
+        || request.auth.uid == profile.uid
+        || sameUnit(profile.division, profile.unit)
+        || canManageDivision(profile.division);
+    }
+
+    match /users/{userId} {
+      allow create: if signedIn() && request.auth.uid == userId;
+      allow read: if signedIn() && canReadOrgProfile(resource.data);
+      allow update: if signedIn() && (
+        request.auth.uid == userId
+        || isSystemAdmin()
+        || canManageDivision(resource.data.division)
+      );
+      allow delete: if isSystemAdmin();
+    }
+
+    match /dashboards/{userId} {
+      allow create, update: if signedIn() && request.auth.uid == userId;
+      allow read: if signedIn() && (
+        request.auth.uid == userId
+        || isSystemAdmin()
+        || canReadOrgProfile(userDoc(userId).data)
+      );
+      allow delete: if isSystemAdmin();
+    }
+
+    match /units/{unitId} {
+      allow read: if signedIn();
+      allow create, update: if isSystemAdmin()
+        || canManageDivision(request.resource.data.division);
+      allow delete: if isSystemAdmin();
+    }
+
+    match /auditLogs/{logId} {
+      allow create: if signedIn();
+      allow read: if isSystemAdmin();
+      allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
