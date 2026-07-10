@@ -41,13 +41,53 @@ service cloud.firestore {
         || canManageDivision(profile.division);
     }
 
+    function isSelfProfileCreate(userId) {
+      return signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.uid == userId
+        && request.resource.data.email == request.auth.token.email
+        && (
+          (
+            isPrimaryAdmin()
+            && request.resource.data.isAdmin == true
+            && request.resource.data.role == 'systemAdmin'
+          )
+          ||
+          (
+            !isPrimaryAdmin()
+            && request.resource.data.isAdmin == false
+            && request.resource.data.role == 'employee'
+          )
+        );
+    }
+
+    function isSafeSelfProfileUpdate(userId) {
+      return signedIn()
+        && request.auth.uid == userId
+        && resource.data.role == 'employee'
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.isAdmin == resource.data.isAdmin
+        && request.resource.data.role == resource.data.role;
+    }
+
+    function isManagerProfileUpdate(userId) {
+      return signedIn()
+        && request.auth.uid != userId
+        && canManageDivision(resource.data.division)
+        && request.resource.data.division == resource.data.division
+        && request.resource.data.isAdmin == resource.data.isAdmin
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.uid == resource.data.uid;
+    }
+
     match /users/{userId} {
-      allow create: if signedIn() && request.auth.uid == userId;
-      allow read: if signedIn() && canReadOrgProfile(resource.data);
+      allow create: if isSelfProfileCreate(userId);
+      allow read: if signedIn() && (request.auth.uid == userId || canReadOrgProfile(resource.data));
       allow update: if signedIn() && (
-        request.auth.uid == userId
+        isSafeSelfProfileUpdate(userId)
         || isSystemAdmin()
-        || canManageDivision(resource.data.division)
+        || isManagerProfileUpdate(userId)
       );
       allow delete: if isSystemAdmin();
     }

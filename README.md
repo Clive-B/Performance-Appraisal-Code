@@ -27,13 +27,20 @@ This repo contains a deployable static HTML build plus Firebase configuration sc
 2. In Firebase Authentication, enable email/password sign-in.
 3. Add the deployment domain to Firebase Authentication authorized domains.
 4. Review `firestore.rules` against the final organizational policy before deploying.
-5. Deploy rules:
+5. Install the Firebase CLI if it is not already available:
+
+```powershell
+npm install -g firebase-tools
+firebase login
+```
+
+6. Deploy rules:
 
 ```powershell
 firebase deploy --only firestore:rules
 ```
 
-6. Deploy hosting:
+7. Deploy hosting:
 
 ```powershell
 firebase deploy --only hosting
@@ -51,8 +58,12 @@ Client-side role checks are only for UI convenience. Firestore rules must be the
 
 ## Recommended Next Hardening Pass
 
-- move attachment binary data to Firebase Storage
+- move attachment binary data to Firebase Storage; the current static build blocks files over 350 KB and upload batches over 700 KB to reduce Firestore document-size failures
 - split the single HTML file into modules
 - add audit logging calls for admin and appraisal actions
 - replace destructive admin UI actions with Cloud Functions
 - add Firebase Emulator tests for Firestore rules
+
+## Current Deployment Decision
+
+This build is suitable for a controlled pilot after Firestore rules are deployed and tested. It is not yet ideal for full institutional rollout because attachments are still embedded in dashboard documents rather than stored in Firebase Storage, and destructive admin actions still run from the client UI.
