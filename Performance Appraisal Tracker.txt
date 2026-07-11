@@ -3164,15 +3164,47 @@
             'July', 'August', 'September', 'October', 'November', 'December'
         ];
         
+        function normalizeTask(task) {
+            const source = task && typeof task === 'object' ? task : {};
+            return {
+                text: source.text || '',
+                completed: !!source.completed,
+                notes: Array.isArray(source.notes) ? source.notes : [],
+                attachments: Array.isArray(source.attachments) ? source.attachments : []
+            };
+        }
+
+        function normalizeObjective(objective, index) {
+            const source = objective && typeof objective === 'object' ? objective : {};
+            const actionPoints = Array.isArray(source.actionPoints) ? source.actionPoints : [];
+            const kpis = Array.isArray(source.kpis) ? source.kpis : [];
+            return {
+                id: source.id || (index + 1),
+                title: source.title || source.name || 'Untitled Objective',
+                status: source.status || 'not-started',
+                progress: Number.isFinite(Number(source.progress)) ? Math.max(0, Math.min(100, Number(source.progress))) : 0,
+                actionPoints: actionPoints.map(normalizeTask),
+                kpis: kpis.map(normalizeTask)
+            };
+        }
+
+        function normalizeDashboardData(dashboardData) {
+            if (!dashboardData || typeof dashboardData !== 'object') {
+                return {objectivesData: [], reviewPeriod};
+            }
+            return {
+                objectivesData: Array.isArray(dashboardData.objectivesData)
+                    ? dashboardData.objectivesData.map(normalizeObjective)
+                    : [],
+                reviewPeriod: dashboardData.reviewPeriod || reviewPeriod
+            };
+        }
+
         // Initialize dashboard with data
         function initializeDashboard(dashboardData) {
-            if (dashboardData) {
-                objectivesData = dashboardData.objectivesData || [];
-                reviewPeriod = dashboardData.reviewPeriod || reviewPeriod;
-            } else {
-                // Empty dashboard for new users or admin view
-                objectivesData = [];
-            }
+            const normalizedDashboard = normalizeDashboardData(dashboardData);
+            objectivesData = normalizedDashboard.objectivesData;
+            reviewPeriod = normalizedDashboard.reviewPeriod;
             
             // Set current date
             const now = new Date();

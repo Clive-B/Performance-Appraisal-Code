@@ -63,14 +63,11 @@ $payload = @{
         display = $reviewDisplay
         savedBy = "local-intranet-smoke"
     }
-    objectivesData = @(
-        @{
-            id = "smoke-objective"
-            title = "Local intranet smoke test"
-            status = "Verified"
-            updatedAt = $stamp
-        }
-    )
+    objectivesData = @()
+    smokeTest = @{
+        status = "Verified"
+        updatedAt = $stamp
+    }
 }
 
 Write-Host "Saving dashboard test payload..."
