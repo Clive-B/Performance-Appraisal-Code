@@ -785,8 +785,9 @@ record UnitCreateRequest(string Name, string Division);
 record UserResponse(Guid Id, string Email, string DisplayName, string Role, string? Division, string? Unit, bool IsActive, DateTime CreatedAt, DateTime UpdatedAt);
 record UnitResponse(Guid Id, string Name, string Division, bool Active);
 record AttachmentResponse(Guid Id, string Name, string ContentType, long Size, string DownloadUrl);
-record AppraisalImportResponse(List<ImportedObjective> Objectives, int ExtractedTextLength);
+record AppraisalImportResponse(List<ImportedObjective> Objectives, ImportedReviewPeriod? SuggestedReviewPeriod, int ExtractedTextLength);
 record ImportedObjective(string Objective, int Weight, string KeyActionPoints, string KeyPerformanceIndicators, string DeliveryDate);
+record ImportedReviewPeriod(string Start, string End, string Display, string SourcePeriod);
 
 static class NcaAppraisalPdf
 {
@@ -794,7 +795,8 @@ static class NcaAppraisalPdf
     {
         var text = ExtractText(pdfBytes);
         var objectives = ExtractNextPeriodObjectives(text);
-        return new AppraisalImportResponse(objectives, text.Length);
+        var reviewPeriod = InferNextReviewPeriod(text);
+        return new AppraisalImportResponse(objectives, reviewPeriod, text.Length);
     }
 
     private static string ExtractText(byte[] pdfBytes)
@@ -955,6 +957,72 @@ static class NcaAppraisalPdf
 
         return objectives;
     }
+
+    private static ImportedReviewPeriod? InferNextReviewPeriod(string text)
+    {
+        var lines = text.Split('\n')
+            .Select(CleanLine)
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .ToList();
+        var flat = Collapse(lines);
+        var match = Regex.Match(flat, @"Appraisal\s+Period\s*[:(]?\s*([A-Za-z]+)\s*-\s*([A-Za-z]+),\s*(\d{4})", RegexOptions.IgnoreCase);
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        var startMonth = MonthNumber(match.Groups[1].Value);
+        var endMonth = MonthNumber(match.Groups[2].Value);
+        if (startMonth == 0 || endMonth == 0)
+        {
+            return null;
+        }
+
+        var year = int.Parse(match.Groups[3].Value);
+        var nextStartMonth = endMonth < 12 ? endMonth + 1 : 1;
+        var nextYear = endMonth < 12 ? year : year + 1;
+        var nextEndMonth = nextStartMonth == 1 ? 6 : 12;
+        var nextEndYear = nextStartMonth == 1 ? nextYear : year;
+
+        var start = $"{MonthName(nextStartMonth)} {nextYear}";
+        var end = $"{MonthName(nextEndMonth)} {nextEndYear}";
+        return new ImportedReviewPeriod(
+            start,
+            end,
+            $"{start} - {end} Review Period",
+            $"{MonthName(startMonth)} - {MonthName(endMonth)}, {year}");
+    }
+
+    private static int MonthNumber(string value)
+    {
+        var normalized = value.Trim().ToLowerInvariant();
+        var names = new[] { "", "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december" };
+        for (var i = 1; i < names.Length; i++)
+        {
+            if (names[i].StartsWith(normalized, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+        return 0;
+    }
+
+    private static string MonthName(int month) => month switch
+    {
+        1 => "January",
+        2 => "February",
+        3 => "March",
+        4 => "April",
+        5 => "May",
+        6 => "June",
+        7 => "July",
+        8 => "August",
+        9 => "September",
+        10 => "October",
+        11 => "November",
+        12 => "December",
+        _ => ""
+    };
 
     private static ImportedObjective? ParseObjectiveSegment(string segment)
     {

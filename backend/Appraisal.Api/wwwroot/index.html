@@ -4233,6 +4233,7 @@
         }
 
         let importedAppraisalObjectives = [];
+        let importedAppraisalReviewPeriod = null;
 
         function splitImportedList(text) {
             const cleaned = String(text || '').replace(/\s+/g, ' ').trim();
@@ -4262,7 +4263,14 @@
                 `;
                 return;
             }
-            preview.innerHTML = objectives.map((item, index) => `
+            const periodNotice = importedAppraisalReviewPeriod ? `
+                <div class="appraisal-import-item" style="background:#ecfdf5;border-color:#a7f3d0;">
+                    <h4><i class="fas fa-calendar-check"></i> Suggested Review Period</h4>
+                    <p><strong>PDF appraisal period:</strong> ${escapeHTML(importedAppraisalReviewPeriod.sourcePeriod || '')}</p>
+                    <p><strong>Dashboard will update to:</strong> ${escapeHTML(importedAppraisalReviewPeriod.display || '')}</p>
+                </div>
+            ` : '';
+            preview.innerHTML = periodNotice + objectives.map((item, index) => `
                 <div class="appraisal-import-item">
                     <h4>${index + 1}. ${escapeHTML(item.objective || 'Untitled Objective')}</h4>
                     <p><strong>Weight:</strong> ${escapeHTML(item.weight ?? '')}% ${item.deliveryDate ? `<strong style="margin-left:12px;">Delivery:</strong> ${escapeHTML(item.deliveryDate)}` : ''}</p>
@@ -4292,11 +4300,13 @@
             try {
                 const result = await window.ncaApiFetch('/api/appraisal/import-pdf', {method: 'POST', body: form, formData: true});
                 importedAppraisalObjectives = Array.isArray(result.objectives) ? result.objectives : [];
+                importedAppraisalReviewPeriod = result.suggestedReviewPeriod || null;
                 renderImportedAppraisalPreview(importedAppraisalObjectives);
                 showNotification(`Extracted ${importedAppraisalObjectives.length} objective(s) from the PDF.`);
             } catch (error) {
                 console.error('PDF import error:', error);
                 importedAppraisalObjectives = [];
+                importedAppraisalReviewPeriod = null;
                 renderImportedAppraisalPreview([]);
                 showNotification(error.message || 'Could not import appraisal PDF.');
             }
@@ -4323,20 +4333,61 @@
             }));
 
             objectivesData = mode === 'replace' ? mapped : objectivesData.concat(mapped);
+            if (importedAppraisalReviewPeriod && importedAppraisalReviewPeriod.start && importedAppraisalReviewPeriod.end) {
+                reviewPeriod = {
+                    start: importedAppraisalReviewPeriod.start,
+                    end: importedAppraisalReviewPeriod.end,
+                    display: importedAppraisalReviewPeriod.display || `${importedAppraisalReviewPeriod.start} - ${importedAppraisalReviewPeriod.end} Review Period`
+                };
+                updatePeriodDisplay();
+            }
             renderObjectives();
             updateStats();
             saveDashboard();
             document.getElementById('appraisal-import-modal')?.classList.remove('show');
-            showNotification(`Applied ${mapped.length} imported objective(s).`);
+            showNotification(importedAppraisalReviewPeriod ? `Applied ${mapped.length} objective(s) and updated the review period.` : `Applied ${mapped.length} imported objective(s).`);
         }
 
-        function collectEvidenceText(objective) {
-            const evidence = [];
+        function compactText(value) {
+            return String(value || '').replace(/\s+/g, ' ').trim();
+        }
+
+        function shortText(value, maxLength = 180) {
+            const text = compactText(value);
+            return text.length > maxLength ? text.slice(0, maxLength - 1).trim() + '...' : text;
+        }
+
+        function listPhrase(items, maxItems = 3) {
+            const clean = (items || []).map(item => shortText(item, 160)).filter(Boolean);
+            if (!clean.length) return '';
+            const visible = clean.slice(0, maxItems);
+            const extra = clean.length - visible.length;
+            return visible.join('; ') + (extra > 0 ? `; and ${extra} other item(s)` : '');
+        }
+
+        function detectEvidenceThemes(text) {
+            const value = compactText(text).toLowerCase();
+            const themeMap = [
+                {name: 'innovation and digital transformation', keywords: ['innovation', 'dashboard', 'automation', 'software', 'digital', 'rpa', 'ai', 'artificial intelligence', 'technology']},
+                {name: 'research and policy analysis', keywords: ['research', 'policy', 'regulatory', 'analysis', 'benchmark', 'recommendation', 'study']},
+                {name: 'financial and industry intelligence', keywords: ['financial', 'finance', 'mno', 'tower', 'bwa', 'paid tv', 'industry health', 'market']},
+                {name: 'stakeholder engagement and collaboration', keywords: ['stakeholder', 'engage', 'meeting', 'workshop', 'collaboration', 'presentation', 'participants']},
+                {name: 'planning and implementation discipline', keywords: ['roadmap', 'schedule', 'implementation', 'delivery', 'plan', 'quarter', 'completed']},
+                {name: 'knowledge sharing and team development', keywords: ['team', 'unit', 'division', 'mentor', 'training', 'knowledge', 'staff']}
+            ];
+            return themeMap
+                .filter(theme => theme.keywords.some(keyword => value.includes(keyword)))
+                .map(theme => theme.name);
+        }
+
+        function collectObjectiveEvidence(objective) {
+            const tasks = [...(objective.actionPoints || []), ...(objective.kpis || [])];
             const completedActions = (objective.actionPoints || []).filter(task => task.completed).map(task => task.text);
             const completedKpis = (objective.kpis || []).filter(task => task.completed).map(task => task.text);
+            const pending = tasks.filter(task => !task.completed).map(task => task.text);
             const notes = [];
             const attachments = [];
-            [...(objective.actionPoints || []), ...(objective.kpis || [])].forEach(task => {
+            tasks.forEach(task => {
                 (task.notes || []).forEach(note => {
                     if (note && note.text) notes.push(note.text);
                 });
@@ -4344,21 +4395,52 @@
                     if (att && att.name) attachments.push(att.name);
                 });
             });
-            if (completedActions.length) evidence.push(`Completed action points: ${completedActions.join('; ')}.`);
-            if (completedKpis.length) evidence.push(`Completed KPIs: ${completedKpis.join('; ')}.`);
-            if (notes.length) evidence.push(`Evidence notes: ${notes.slice(0, 6).join('; ')}.`);
-            if (attachments.length) evidence.push(`Supporting attachments uploaded: ${attachments.slice(0, 6).join(', ')}.`);
-            if (!evidence.length) evidence.push('Progress evidence is not yet recorded in the tracker.');
-            return evidence.join(' ');
+            const allText = [
+                objective.title,
+                ...tasks.map(task => task.text),
+                ...notes,
+                ...attachments
+            ].join(' ');
+            return {
+                totalTasks: tasks.length,
+                completedTasks: completedActions.length + completedKpis.length,
+                completedActions,
+                completedKpis,
+                pending,
+                notes,
+                attachments,
+                themes: detectEvidenceThemes(allText)
+            };
         }
 
         function buildObjectiveAssessment(objective) {
-            const evidence = collectEvidenceText(objective);
+            const evidence = collectObjectiveEvidence(objective);
             const progress = Number(objective.progress) || 0;
-            if (progress >= 80) return `Substantial progress was made on this objective. ${evidence}`;
-            if (progress >= 40) return `Meaningful progress was made on this objective, with outstanding items still being tracked. ${evidence}`;
-            if (progress > 0) return `Initial progress was made on this objective and further execution is required. ${evidence}`;
-            return `This objective is captured for the review period and requires further evidence updates. ${evidence}`;
+            const themes = evidence.themes.length ? `The work mainly contributed to ${listPhrase(evidence.themes, 3)}. ` : '';
+            const progressSentence = progress >= 80
+                ? 'The objective recorded substantial implementation progress during the review period. '
+                : progress >= 40
+                    ? 'The objective recorded meaningful progress, with some activities still requiring follow-through. '
+                    : progress > 0
+                        ? 'The objective moved beyond initial execution and requires continued attention to complete the outstanding actions. '
+                        : 'The objective has been captured for the review period, but supporting evidence and completion updates are still required. ';
+            const actionSentence = evidence.completedActions.length
+                ? `Key action points completed or advanced include ${listPhrase(evidence.completedActions, 3)}. `
+                : '';
+            const kpiSentence = evidence.completedKpis.length
+                ? `The KPI evidence reflects ${listPhrase(evidence.completedKpis, 3)}. `
+                : '';
+            const noteSentence = evidence.notes.length
+                ? `Progress notes further indicate ${listPhrase(evidence.notes, 3)}. `
+                : '';
+            const attachmentSentence = evidence.attachments.length
+                ? `Supporting evidence has been uploaded, including ${listPhrase(evidence.attachments, 4)}. `
+                : '';
+            const pendingSentence = evidence.pending.length && progress < 100
+                ? `Outstanding items to track include ${listPhrase(evidence.pending, 2)}.`
+                : '';
+
+            return compactText(progressSentence + themes + actionSentence + kpiSentence + noteSentence + attachmentSentence + pendingSentence);
         }
 
         function buildAppraisalDraft() {
@@ -4402,26 +4484,56 @@
             return lines.join('\n');
         }
 
+        function getDashboardEvidenceProfile() {
+            const profile = {
+                objectiveCount: objectivesData.length,
+                completedCount: 0,
+                totalTasks: 0,
+                noteCount: 0,
+                attachmentCount: 0,
+                themes: [],
+                completedSamples: [],
+                noteSamples: []
+            };
+            const themeSet = new Set();
+            objectivesData.forEach(objective => {
+                const evidence = collectObjectiveEvidence(objective);
+                profile.completedCount += evidence.completedTasks;
+                profile.totalTasks += evidence.totalTasks;
+                profile.noteCount += evidence.notes.length;
+                profile.attachmentCount += evidence.attachments.length;
+                evidence.themes.forEach(theme => themeSet.add(theme));
+                profile.completedSamples.push(...evidence.completedActions, ...evidence.completedKpis);
+                profile.noteSamples.push(...evidence.notes);
+            });
+            profile.themes = Array.from(themeSet);
+            return profile;
+        }
+
         function getCoreCompetencyDrafts() {
-            const completedCount = objectivesData.reduce((sum, obj) => sum + [...(obj.actionPoints || []), ...(obj.kpis || [])].filter(task => task.completed).length, 0);
-            const evidenceCount = objectivesData.reduce((sum, obj) => sum + [...(obj.actionPoints || []), ...(obj.kpis || [])].reduce((inner, task) => inner + (task.notes || []).length + (task.attachments || []).length, 0), 0);
+            const profile = getDashboardEvidenceProfile();
+            const themePhrase = profile.themes.length ? listPhrase(profile.themes, 4) : 'assigned divisional objectives';
+            const samplePhrase = profile.completedSamples.length ? listPhrase(profile.completedSamples, 3) : 'the assigned action points and KPIs';
+            const notePhrase = profile.noteSamples.length ? listPhrase(profile.noteSamples, 2) : 'the recorded progress updates';
             return [
-                {name: 'Commitment to Achieve', weight: 20, assessment: `Demonstrated commitment by tracking ${objectivesData.length} objective(s), completing ${completedCount} evidence-linked task(s), and maintaining progress records throughout the review period.`},
-                {name: 'Communicating with Impact', weight: 20, assessment: 'Communicated progress through documented notes, updates, and evidence records linked to objectives and KPIs.'},
-                {name: 'Planning, Implementing & Controlling', weight: 20, assessment: 'Planned work through defined action points and KPIs, monitored progress, and used the tracker to control delivery against the review objectives.'},
-                {name: 'Critical Problem Solving', weight: 20, assessment: 'Used structured evidence, task follow-up, and dashboard monitoring to identify delivery gaps and guide corrective action.'},
-                {name: 'Developing People & Teams', weight: 20, assessment: `Supported knowledge sharing and team delivery through tracked work items and ${evidenceCount} note/attachment evidence record(s).`}
+                {name: 'Commitment to Achieve', weight: 20, assessment: `Demonstrated strong commitment by actively tracking ${profile.objectiveCount} objective(s), advancing ${profile.completedCount} of ${profile.totalTasks} action/KPI item(s), and focusing effort on ${themePhrase}. Evidence of delivery includes ${samplePhrase}.`},
+                {name: 'Communicating with Impact', weight: 20, assessment: `Communicated progress through structured notes, evidence records, and objective-level updates. The records show clear follow-through on ${notePhrase}, supporting transparent reporting to supervisors and stakeholders.`},
+                {name: 'Planning, Implementing & Controlling', weight: 20, assessment: `Planned work through defined objectives, action points, KPIs, weights, and delivery dates, then used the tracker to monitor progress and control execution. This provided a clear line of sight between planned outputs, evidence, and review-period performance.`},
+                {name: 'Critical Problem Solving', weight: 20, assessment: `Applied a structured problem-solving approach by using evidence, progress status, and supporting documents to identify completed work, outstanding gaps, and follow-up needs across ${themePhrase}.`},
+                {name: 'Developing People & Teams', weight: 20, assessment: `Supported team delivery by making progress visible, preserving ${profile.noteCount} note(s) and ${profile.attachmentCount} attachment(s), and creating a shared evidence base that can support collaboration, supervision, and knowledge transfer.`}
             ];
         }
 
         function getCoreValueDrafts() {
+            const profile = getDashboardEvidenceProfile();
+            const themePhrase = profile.themes.length ? listPhrase(profile.themes, 3) : 'assigned objectives';
             return [
-                {name: 'Teamwork - Combining efforts towards achieving a common goal', assessment: 'Collaborated with colleagues and stakeholders to move assigned objectives forward and support shared divisional outcomes.'},
-                {name: 'Accountability - Account and accept responsibility for your activities', assessment: 'Maintained traceable progress records, notes, and evidence against assigned objectives and KPIs.'},
-                {name: 'Consistency - Reliable conduct to facilitate fairness and accuracy', assessment: 'Used consistent tracking of action points, KPIs, progress, and evidence throughout the review period.'},
-                {name: 'Trust - Assured reliance on character, ability and strengths', assessment: 'Demonstrated reliability by documenting work done and preserving supporting evidence for review.'},
-                {name: 'Innovation - Initiative that transforms lives and work processes', assessment: 'Used the performance tracker and digital evidence workflow to improve appraisal preparation and reduce manual work.'},
-                {name: 'Transparency - Striving to earn your trust and loyalty', assessment: 'Kept progress, challenges, and evidence visible through structured objective tracking and appraisal draft preparation.'}
+                {name: 'Teamwork - Combining efforts towards achieving a common goal', assessment: `Worked in support of shared divisional outcomes by progressing objectives linked to ${themePhrase} and preserving evidence that can be reviewed with supervisors, colleagues, and stakeholders.`},
+                {name: 'Accountability - Account and accept responsibility for your activities', assessment: `Maintained accountability by recording progress against assigned action points and KPIs, with ${profile.noteCount} note(s) and ${profile.attachmentCount} attachment(s) available to support review and verification.`},
+                {name: 'Consistency - Reliable conduct to facilitate fairness and accuracy', assessment: `Applied a consistent tracking discipline across the review period by updating objective status, task completion, supporting notes, and evidence records in one place.`},
+                {name: 'Trust - Assured reliance on character, ability and strengths', assessment: `Demonstrated reliability by preserving traceable evidence of work done, progress made, and outstanding actions, allowing reviewers to rely on a clear record of performance.`},
+                {name: 'Innovation - Initiative that transforms lives and work processes', assessment: `Showed initiative by using a digital appraisal workflow to connect objectives, KPIs, evidence, and draft appraisal text, reducing manual preparation and improving the quality of performance reporting.`},
+                {name: 'Transparency - Striving to earn your trust and loyalty', assessment: `Promoted transparency by making progress, evidence, and review-period outputs visible through structured tracking and appraisal-ready summaries.`}
             ];
         }
 
@@ -4561,6 +4673,7 @@
 
             document.getElementById('import-appraisal-pdf')?.addEventListener('click', function() {
                 importedAppraisalObjectives = [];
+                importedAppraisalReviewPeriod = null;
                 renderImportedAppraisalPreview([]);
                 document.getElementById('appraisal-import-modal')?.classList.add('show');
             });
