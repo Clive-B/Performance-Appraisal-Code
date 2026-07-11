@@ -4025,8 +4025,76 @@
             modal.classList.add('show');
         }
 
+        function setupUserMenuEventListeners() {
+            const menuButton = document.getElementById('user-menu-btn');
+            const dropdown = document.getElementById('user-dropdown');
+            const logoutButton = document.getElementById('logout-btn');
+            const changePasswordButton = document.getElementById('change-password-btn');
+            const cancelChangePasswordButton = document.getElementById('cancel-change-password');
+            const saveChangePasswordButton = document.getElementById('save-change-password');
+            const signOutButton = document.getElementById('sign-out-btn');
+
+            if (menuButton && dropdown && !menuButton.dataset.bound) {
+                menuButton.dataset.bound = 'true';
+                menuButton.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropdown.classList.toggle('show');
+                });
+            }
+
+            if (logoutButton && !logoutButton.dataset.bound) {
+                logoutButton.dataset.bound = 'true';
+                logoutButton.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropdown?.classList.remove('show');
+                    signOut();
+                });
+            }
+
+            if (changePasswordButton && !changePasswordButton.dataset.bound) {
+                changePasswordButton.dataset.bound = 'true';
+                changePasswordButton.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropdown?.classList.remove('show');
+                    openChangePasswordModal();
+                });
+            }
+
+            if (cancelChangePasswordButton && !cancelChangePasswordButton.dataset.bound) {
+                cancelChangePasswordButton.dataset.bound = 'true';
+                cancelChangePasswordButton.addEventListener('click', closeChangePasswordModal);
+            }
+
+            if (saveChangePasswordButton && !saveChangePasswordButton.dataset.bound) {
+                saveChangePasswordButton.dataset.bound = 'true';
+                saveChangePasswordButton.addEventListener('click', changePassword);
+            }
+
+            if (signOutButton && !signOutButton.dataset.bound) {
+                signOutButton.dataset.bound = 'true';
+                signOutButton.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    signOut();
+                });
+            }
+
+            if (!document.body.dataset.userMenuOutsideBound) {
+                document.body.dataset.userMenuOutsideBound = 'true';
+                document.addEventListener('click', function(e) {
+                    if (!e.target.closest('.user-menu')) {
+                        document.getElementById('user-dropdown')?.classList.remove('show');
+                    }
+                });
+            }
+        }
+
         // Setup dashboard event listeners
         function setupDashboardEventListeners() {
+            setupUserMenuEventListeners();
+
             // Filter buttons
             document.querySelectorAll('.filter-btn').forEach(btn => {
                 btn.addEventListener('click', function() {
@@ -4203,40 +4271,6 @@
                     updateStats();
                     saveDashboard();
                     showNotification('All progress has been reset');
-                }
-            });
-            
-            // User menu
-            document.getElementById('user-menu-btn').addEventListener('click', function(e) {
-                e.stopPropagation();
-                document.getElementById('user-dropdown').classList.toggle('show');
-            });
-            
-            // Logout button in dropdown
-            document.getElementById('logout-btn').addEventListener('click', function(e) {
-                e.preventDefault();
-                signOut();
-            });
-
-            document.getElementById('change-password-btn').addEventListener('click', function(e) {
-                e.preventDefault();
-                document.getElementById('user-dropdown').classList.remove('show');
-                openChangePasswordModal();
-            });
-
-            document.getElementById('cancel-change-password').addEventListener('click', closeChangePasswordModal);
-            document.getElementById('save-change-password').addEventListener('click', changePassword);
-            
-            // Sign Out Button (in controls section)
-            document.getElementById('sign-out-btn').addEventListener('click', function(e) {
-                e.preventDefault();
-                signOut();
-            });
-            
-            // Close dropdown when clicking outside
-            document.addEventListener('click', function(e) {
-                if (!e.target.closest('.user-menu')) {
-                    document.getElementById('user-dropdown').classList.remove('show');
                 }
             });
             
