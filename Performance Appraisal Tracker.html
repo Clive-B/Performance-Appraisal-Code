@@ -15,6 +15,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
     <style>
         /* Add login system styles */
         .auth-container {
@@ -2405,12 +2406,14 @@
         const app = firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
+        const storage = firebase.storage();
 
         // Expose Firebase handles for the Division / Unit upgrade layer.
         // The main file uses const variables, so the extension needs safe window aliases.
         window.app = app;
         window.auth = auth;
         window.db = db;
+        window.storage = storage;
 
         // =========================
         // AUTHENTICATION FUNCTIONS
@@ -2678,10 +2681,29 @@
         // =========================
         
         let pendingAdminAction = null;
+
+        function isPrimaryAdminSession() {
+            const user = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
+            return String(user.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase();
+        }
+
+        function configureAdminControls() {
+            const canRunDestructiveActions = isPrimaryAdminSession();
+            ['clear-all-profiles', 'reset-all-data'].forEach(id => {
+                const btn = document.getElementById(id);
+                if (!btn) return;
+                btn.style.display = canRunDestructiveActions ? 'inline-flex' : 'none';
+            });
+        }
         
         function setupAdminEventListeners() {
+            configureAdminControls();
             // Clear All Profiles button
             document.getElementById('clear-all-profiles').addEventListener('click', function() {
+                if (!isPrimaryAdminSession()) {
+                    showNotification('Only the primary administrator can clear all profiles.');
+                    return;
+                }
                 pendingAdminAction = 'clearProfiles';
                 document.getElementById('admin-confirm-text').textContent = 
                     "Are you sure you want to clear ALL user profiles? This will delete all user accounts and their data. This action cannot be undone!";
@@ -2690,6 +2712,10 @@
             
             // Reset All Data button
             document.getElementById('reset-all-data').addEventListener('click', function() {
+                if (!isPrimaryAdminSession()) {
+                    showNotification('Only the primary administrator can reset all user data.');
+                    return;
+                }
                 pendingAdminAction = 'resetData';
                 document.getElementById('admin-confirm-text').textContent = 
                     "Are you sure you want to reset ALL user data? This will clear all objectives, tasks, notes, and attachments for all users, but keep the user accounts. This action cannot be undone!";
@@ -2719,6 +2745,11 @@
         }
         
         async function clearAllProfiles() {
+            if (!isPrimaryAdminSession()) {
+                showNotification('Only the primary administrator can clear all profiles.');
+                return;
+            }
+
             try {
                 // Get all users from Firestore
                 const usersSnapshot = await db.collection('users').get();
@@ -2746,24 +2777,18 @@
         }
         
         async function resetAllUserData() {
+            if (!isPrimaryAdminSession()) {
+                showNotification('Only the primary administrator can reset all user data.');
+                return;
+            }
+
             try {
-                // Get all users from Firestore
-                const usersSnapshot = await db.collection('users').get();
+                // Remove dashboard documents while keeping user accounts intact.
+                const dashboardsSnapshot = await db.collection('dashboards').get();
                 const batch = db.batch();
                 
-                usersSnapshot.forEach(doc => {
-                    // Reset dashboard data for each user
-                    const emptyData = {
-                        objectivesData: [],
-                        reviewPeriod: {
-                            start: 'June 2024',
-                            end: 'July 2024',
-                            display: 'Mid-Year Review Period (June 2024 - July 2024)'
-                        },
-                        lastUpdated: new Date().toISOString()
-                    };
-                    
-                    batch.set(db.collection('dashboards').doc(doc.id), emptyData);
+                dashboardsSnapshot.forEach(doc => {
+                    batch.delete(doc.ref);
                 });
                 
                 await batch.commit();
@@ -2937,6 +2962,44 @@
         function escapeAttribute(value) {
             return escapeHTML(value).replace(/`/g, '&#96;');
         }
+
+        function sanitizeStorageFileName(name) {
+            return String(name || 'attachment')
+                .replace(/[^a-zA-Z0-9._-]+/g, '_')
+                .replace(/^_+|_+$/g, '')
+                .slice(0, 120) || 'attachment';
+        }
+
+        function getAttachmentUrl(attachment) {
+            return attachment && (attachment.url || attachment.downloadURL || attachment.data || '');
+        }
+
+        function buildAttachmentPath(userId, objectiveId, taskType, taskIndex, file) {
+            const fileName = sanitizeStorageFileName(file.name);
+            const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+            return `attachments/${userId}/objective-${objectiveId}/${taskType}-${taskIndex}/${unique}-${fileName}`;
+        }
+
+        async function uploadAttachmentToStorage(file, userId, objectiveId, taskType, taskIndex) {
+            const path = buildAttachmentPath(userId, objectiveId, taskType, taskIndex, file);
+            const ref = storage.ref(path);
+            const snapshot = await ref.put(file, {
+                contentType: file.type || 'application/octet-stream',
+                customMetadata: {
+                    uploadedBy: userId,
+                    originalName: file.name
+                }
+            });
+            const url = await snapshot.ref.getDownloadURL();
+            return {
+                name: file.name,
+                size: file.size,
+                type: file.type || 'application/octet-stream',
+                storagePath: path,
+                url,
+                uploadedAt: new Date().toISOString()
+            };
+        }
         // Render objectives based on current filter
         function renderObjectives() {
             const container = document.getElementById('objectives-container');
@@ -3100,7 +3163,7 @@
                     </div>
                     <div class="attachment-info">
                         <span class="attachment-size">${formatFileSize(attachment.size)}</span>
-                        <button class="view-attachment-btn" data-file="${escapeAttribute(attachment.data)}" data-filename="${escapeAttribute(attachment.name)}">
+                        <button class="view-attachment-btn" data-file="${escapeAttribute(attachment.data)}" data-url="${escapeAttribute(getAttachmentUrl(attachment))}" data-filename="${escapeAttribute(attachment.name)}" data-type="${escapeAttribute(attachment.type)}">
                             <i class="fas fa-eye"></i> View
                         </button>
                     </div>
@@ -4264,75 +4327,73 @@
             }
         }
 
-        function handleSaveAttachment(e) {
+        async function handleSaveAttachment(e) {
             const btn = e.target.closest('.attachment-form-btn.save');
             const taskItem = btn.closest('.task-item');
             const fileInput = taskItem.querySelector('.attachment-file-input');
             const objectiveId = parseInt(taskItem.closest('.objective-card').getAttribute('data-objective-id'));
+            const user = JSON.parse(sessionStorage.getItem('currentUser') || '{}');
             
             if (fileInput.files.length > 0) {
                 const uploadProgress = taskItem.querySelector('.upload-progress');
-                const maxAttachmentBytes = 350 * 1024;
-                const maxBatchBytes = 700 * 1024;
+                const maxAttachmentBytes = 10 * 1024 * 1024;
+                const maxBatchBytes = 25 * 1024 * 1024;
                 const files = Array.from(fileInput.files);
                 const oversizedFiles = files.filter(file => file.size > maxAttachmentBytes);
                 const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
 
+                if (!user.uid) {
+                    showNotification('Please sign in before uploading attachments.');
+                    return;
+                }
+
                 if (oversizedFiles.length) {
                     uploadProgress.classList.remove('active');
-                    showNotification(`Attachment too large. Keep each evidence file under 350 KB until Firebase Storage is enabled.`);
+                    showNotification('Attachment too large. Keep each evidence file under 10 MB.');
                     return;
                 }
 
                 if (totalBytes > maxBatchBytes) {
                     uploadProgress.classList.remove('active');
-                    showNotification('Too many attachments at once. Keep each upload batch under 700 KB until Firebase Storage is enabled.');
+                    showNotification('Too many attachments at once. Keep each upload batch under 25 MB.');
                     return;
                 }
 
                 uploadProgress.classList.add('active');
                 uploadProgress.textContent = `Uploading ${fileInput.files.length} file(s)...`;
-                
-                // Process each file
-                const processedFiles = [];
-                
-                files.forEach((file, index) => {
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        processedFiles.push({
-                            name: file.name,
-                            size: file.size,
-                            type: file.type,
-                            data: e.target.result
-                        });
-                        
-                        // When all files are processed
-                        if (processedFiles.length === files.length) {
-                            const objective = objectivesData.find(obj => obj.id === objectiveId);
-                            if (objective) {
-                                const taskListContainer = taskItem.closest('.task-list');
-                                const isAction = taskListContainer.id.startsWith('action-list');
-                                const taskIndex = Array.from(taskListContainer.children).indexOf(taskItem);
-                                
-                                const taskList = isAction ? objective.actionPoints : objective.kpis;
-                                if (taskList[taskIndex]) {
-                                    if (!taskList[taskIndex].attachments) taskList[taskIndex].attachments = [];
-                                    taskList[taskIndex].attachments.push(...processedFiles);
-                                    
-                                    // Re-render the task
-                                    const taskListElement = taskItem.closest('.task-list');
-                                    const newTaskHTML = createTaskHTML(taskList[taskIndex], taskIndex, isAction ? 'action' : 'kpi', objectiveId);
-                                    taskItem.outerHTML = newTaskHTML;
-                                    
-                                    updateStats();
-                                    saveDashboard();
-                                    showNotification(`${files.length} file(s) uploaded`);
-                                }
-                            }
-                        }
-                    };
-                    reader.readAsDataURL(file);
-                });
+
+                try {
+                    const objective = objectivesData.find(obj => obj.id === objectiveId);
+                    if (!objective) throw new Error('Objective not found.');
+
+                    const taskListContainer = taskItem.closest('.task-list');
+                    const isAction = taskListContainer.id.startsWith('action-list');
+                    const taskType = isAction ? 'action' : 'kpi';
+                    const taskIndex = Array.from(taskListContainer.children).indexOf(taskItem);
+                    const taskList = isAction ? objective.actionPoints : objective.kpis;
+                    if (!taskList[taskIndex]) throw new Error('Task not found.');
+
+                    const processedFiles = [];
+                    for (const [index, file] of files.entries()) {
+                        uploadProgress.textContent = `Uploading ${index + 1} of ${files.length}: ${file.name}`;
+                        processedFiles.push(await uploadAttachmentToStorage(file, user.uid, objectiveId, taskType, taskIndex));
+                    }
+
+                    if (!taskList[taskIndex].attachments) taskList[taskIndex].attachments = [];
+                    taskList[taskIndex].attachments.push(...processedFiles);
+
+                    const newTaskHTML = createTaskHTML(taskList[taskIndex], taskIndex, taskType, objectiveId);
+                    taskItem.outerHTML = newTaskHTML;
+
+                    updateStats();
+                    await saveDashboard();
+                    showNotification(`${files.length} file(s) uploaded`);
+                } catch (error) {
+                    console.error('Attachment upload failed:', error);
+                    showNotification('Attachment upload failed: ' + error.message);
+                } finally {
+                    uploadProgress.classList.remove('active');
+                }
             }
         }
 
@@ -4346,7 +4407,7 @@
             addAttachmentBtn.style.display = 'block';
         }
 
-        function handleDeleteAttachment(e) {
+        async function handleDeleteAttachment(e) {
             const btn = e.target.closest('.delete-attachment-btn');
             const objectiveId = parseInt(btn.getAttribute('data-objective-id'));
             const taskIndex = parseInt(btn.getAttribute('data-task-index'));
@@ -4357,6 +4418,14 @@
             if (objective) {
                 const taskList = taskType === 'action' ? objective.actionPoints : objective.kpis;
                 if (taskList[taskIndex] && taskList[taskIndex].attachments[attachmentIndex]) {
+                    const attachment = taskList[taskIndex].attachments[attachmentIndex];
+                    if (attachment.storagePath) {
+                        try {
+                            await storage.ref(attachment.storagePath).delete();
+                        } catch (error) {
+                            console.warn('Storage attachment delete skipped:', error);
+                        }
+                    }
                     taskList[taskIndex].attachments.splice(attachmentIndex, 1);
                     
                     // Re-render the task
@@ -4374,8 +4443,10 @@
 
         function handleViewAttachment(e) {
             const btn = e.target.closest('.view-attachment-btn');
-            const fileData = btn.getAttribute('data-file');
+            const legacyFileData = btn.getAttribute('data-file');
+            const fileUrl = btn.getAttribute('data-url') || legacyFileData;
             const fileName = btn.getAttribute('data-filename');
+            const fileType = btn.getAttribute('data-type') || '';
             
             const modal = document.getElementById('file-preview-modal');
             const container = document.getElementById('file-preview-container');
@@ -4387,34 +4458,27 @@
             if (fileName.match(/\.(jpg|jpeg|png|gif)$/i)) {
                 // Image file
                 const img = document.createElement('img');
-                img.src = fileData;
+                img.src = fileUrl;
                 img.className = 'file-preview';
                 container.appendChild(img);
             } else if (fileName.match(/\.(pdf)$/i)) {
                 // PDF file
                 const embed = document.createElement('embed');
-                embed.src = fileData;
+                embed.src = fileUrl;
                 embed.type = 'application/pdf';
                 embed.className = 'file-preview';
                 container.appendChild(embed);
             } else if (fileName.match(/\.(txt)$/i)) {
                 // Text file
-                const textContent = atob(fileData.split(',')[1]);
                 const pre = document.createElement('pre');
-                pre.textContent = textContent;
+                if (legacyFileData && legacyFileData.startsWith('data:')) {
+                    pre.textContent = atob(legacyFileData.split(',')[1] || '');
+                } else {
+                    pre.textContent = 'Use Download to open this text attachment.';
+                }
                 pre.style.whiteSpace = 'pre-wrap';
                 pre.style.padding = '20px';
                 container.appendChild(pre);
-            } else if (fileName.match(/\.(html|htm)$/i)) {
-                // HTML file preview
-                const iframe = document.createElement('iframe');
-                iframe.srcdoc = atob(fileData.split(',')[1]);
-                iframe.className = 'file-preview';
-                iframe.style.width = '100%';
-                iframe.style.height = '60vh';
-                iframe.style.border = '1px solid #e0e0e0';
-                iframe.style.borderRadius = '8px';
-                container.appendChild(iframe);
             } else {
                 // Unsupported file type
                 container.innerHTML = `
@@ -4423,14 +4487,14 @@
                         <h4>File Preview Not Available</h4>
                         <p>Preview is not available for this file type.</p>
                         <div class="file-info">
-                            <p>File: ${fileName}</p>
+                            <p>File: ${escapeHTML(fileName)}</p>
                         </div>
                     </div>
                 `;
             }
             
             // Set up download
-            downloadBtn.href = fileData;
+            downloadBtn.href = fileUrl;
             downloadBtn.download = fileName;
             
             modal.classList.add('show');

@@ -11,22 +11,24 @@ This repo contains a deployable static HTML build plus Firebase configuration sc
 - added escaping for core user-rendered objective, task, note, owner, and attachment fields
 - removed one duplicate organization-profile patch block
 - added Firebase Hosting configuration
-- added Firestore security rules starter policy
+- added Firestore and Storage security rules starter policies
+- moved new attachment uploads to Firebase Storage while keeping old embedded attachments viewable
 - ignored local backup artifacts
 
 ## Files
 
 - `Performance Appraisal Tracker.html` - primary browser entry point
 - `Performance Appraisal Tracker.txt` - mirrored source copy of the HTML artifact
-- `firebase.json` - Firebase Hosting and Firestore rules configuration
+- `firebase.json` - Firebase Hosting, Firestore, and Storage rules configuration
 - `firestore.rules` - security rules for users, dashboards, units, and audit logs
+- `storage.rules` - security rules for user-owned attachment uploads
 
 ## Firebase Setup
 
 1. Confirm the Firebase project is `nca-performance-dashboard`.
 2. In Firebase Authentication, enable email/password sign-in.
 3. Add the deployment domain to Firebase Authentication authorized domains.
-4. Review `firestore.rules` against the final organizational policy before deploying.
+4. Review `firestore.rules` and `storage.rules` against the final organizational policy before deploying.
 5. Install the Firebase CLI if it is not already available:
 
 ```powershell
@@ -37,7 +39,7 @@ firebase login
 6. Deploy rules:
 
 ```powershell
-firebase deploy --only firestore:rules
+firebase deploy --only firestore:rules,storage
 ```
 
 7. Deploy hosting:
@@ -54,16 +56,17 @@ Client-side role checks are only for UI convenience. Firestore rules must be the
 - unit members can read only their unit's visible profiles/dashboards
 - director-level roles can read/manage their division: Divisional Head, Director, Secretariat, and Deputy Director General
 - system administrators can perform administrative actions
-- destructive operations are denied to ordinary users
+- destructive global profile/dashboard deletion is limited to the primary administrator account
+- attachment uploads are stored under the signed-in user's Storage path and are limited to approved document/image types under 10 MB
 
 ## Recommended Next Hardening Pass
 
-- move attachment binary data to Firebase Storage; the current static build blocks files over 350 KB and upload batches over 700 KB to reduce Firestore document-size failures
 - split the single HTML file into modules
 - add audit logging calls for admin and appraisal actions
 - replace destructive admin UI actions with Cloud Functions
 - add Firebase Emulator tests for Firestore rules
+- migrate any legacy Base64 attachments already saved in Firestore into Firebase Storage
 
 ## Current Deployment Decision
 
-This build is suitable for a controlled pilot after Firestore rules are deployed and tested. It is not yet ideal for full institutional rollout because attachments are still embedded in dashboard documents rather than stored in Firebase Storage, and destructive admin actions still run from the client UI.
+This build is suitable for a stronger controlled pilot after Firestore and Storage rules are deployed and tested. It is still not ideal for full institutional rollout because legacy embedded attachments may exist in older dashboard documents, destructive admin actions should ultimately move behind Cloud Functions, and emulator tests should be added before broad deployment.
