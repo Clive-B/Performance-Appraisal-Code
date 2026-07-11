@@ -3012,10 +3012,56 @@
             }
         }
 
+        function installUserMenuDelegatedHandler() {
+            if (window.NCA_USER_MENU_DELEGATED_BOUND) return;
+            window.NCA_USER_MENU_DELEGATED_BOUND = true;
+
+            document.addEventListener('click', function(e) {
+                const menuButton = e.target.closest('#user-menu-btn');
+                const logoutButton = e.target.closest('#logout-btn, #sign-out-btn');
+                const changePasswordButton = e.target.closest('#change-password-btn');
+                const dropdown = document.getElementById('user-dropdown');
+
+                if (menuButton) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    dropdown?.classList.toggle('show');
+                    return;
+                }
+
+                if (logoutButton) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    dropdown?.classList.remove('show');
+                    signOut();
+                    return;
+                }
+
+                if (changePasswordButton) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    dropdown?.classList.remove('show');
+                    openChangePasswordModal();
+                    return;
+                }
+
+                if (!e.target.closest('.user-menu')) {
+                    dropdown?.classList.remove('show');
+                }
+            }, true);
+        }
+
+        installUserMenuDelegatedHandler();
+
         // Sign Out Function
         async function signOut() {
+            let signOutError = null;
             try {
                 await auth.signOut();
+            } catch (error) {
+                signOutError = error;
+                console.warn('Server sign out failed; clearing local session anyway:', error);
+            } finally {
                 sessionStorage.removeItem('currentUser');
                 
                 // Hide dashboard
@@ -3036,8 +3082,9 @@
                 
                 // Show success message
                 showAuthSuccess("You have been signed out successfully");
-            } catch (error) {
-                console.error('Sign out error:', error);
+                if (signOutError) {
+                    console.warn('Local sign out completed after server sign out warning.');
+                }
             }
         }
 
