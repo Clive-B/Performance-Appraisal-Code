@@ -1,4 +1,5 @@
 backups/
+artifacts/
 *.log
 .firebase/
 .firebaserc.local

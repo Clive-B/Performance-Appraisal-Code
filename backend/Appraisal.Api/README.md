@@ -65,7 +65,7 @@ dotnet run --project backend\Appraisal.Api\Appraisal.Api.csproj
 Default local URL:
 
 ```text
-http://localhost:5000
+http://localhost:5247
 ```
 
 ## Key Endpoints
@@ -83,6 +83,12 @@ http://localhost:5000
 - `GET /api/attachments/{attachmentId}/download`
 - `DELETE /api/attachments/{attachmentId}`
 
-## Next Frontend Step
+## Deployment Package
 
-The existing HTML dashboard still contains Firebase calls. The next conversion step is to replace those calls with the API endpoints above, while preserving the current UI and role behavior.
+From the repo root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\publish-intranet.ps1
+```
+
+See `docs/nca-server-deployment.md` for IIS setup, production configuration, backup, restore, and smoke testing.

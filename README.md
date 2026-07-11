@@ -2,11 +2,11 @@
 
 Performance appraisal dashboard for tracking objectives, action points, KPIs, notes, attachments, reminders, and division/unit reporting.
 
-The original build is a single-page Firebase-backed dashboard. The repo now also contains the start of an NCA intranet backend that replaces Firebase with ASP.NET Core and PostgreSQL.
+The original build was a single-page Firebase-backed dashboard. The active intranet path now uses an ASP.NET Core backend with PostgreSQL and server-side attachment storage.
 
 ## Current Deployment State
 
-This repo contains a deployable static HTML build plus Firebase configuration scaffolding. The first hardening pass has:
+This repo contains a deployable static HTML build, Firebase configuration scaffolding for the older path, and the active NCA intranet/PostgreSQL backend. The first hardening pass has:
 
 - removed a browser-injected Kaspersky script from the shared artifact
 - removed plaintext security-question collection
@@ -26,7 +26,11 @@ This repo contains a deployable static HTML build plus Firebase configuration sc
 - `storage.rules` - security rules for user-owned attachment uploads
 - `backend/Appraisal.Api` - ASP.NET Core API for NCA intranet/PostgreSQL hosting
 - `database/postgresql-schema.sql` - PostgreSQL schema for the intranet backend
-- `docs/nca-intranet-postgresql-migration.md` - server migration notes and checklist
+- `docs/nca-intranet-postgresql-migration.md` - migration notes and checklist
+- `docs/nca-server-deployment.md` - NCA Windows Server/IIS deployment guide
+- `tools/publish-intranet.ps1` - creates a deployment folder and zip
+- `tools/backup-intranet.ps1` - backs up PostgreSQL data and attachment storage
+- `tools/restore-intranet.ps1` - restores PostgreSQL data and optional attachments
 
 ## NCA Intranet / PostgreSQL Track
 
@@ -47,6 +51,14 @@ Build the intranet API:
 $env:DOTNET_CLI_HOME="$PWD\.dotnet"
 dotnet build backend\Appraisal.Api\Appraisal.Api.csproj
 ```
+
+Package the intranet API for an NCA server:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\publish-intranet.ps1
+```
+
+Follow `docs/nca-server-deployment.md` for the Windows Server/IIS deployment steps, production configuration, smoke testing, and backup/restore process.
 
 ## Firebase Setup
 
