@@ -260,6 +260,65 @@ app.MapGet("/api/users", async (HttpContext http, NpgsqlDataSource db) =>
     return Results.Ok(users);
 }).RequireAuthorization();
 
+app.MapPost("/api/users", async (UserCreateRequest request, HttpContext http, NpgsqlDataSource db) =>
+{
+    if (request.Password.Length < 8) return Results.BadRequest(new { message = "Password must be at least 8 characters." });
+    if (!Roles.ManagerAssignable.Contains(request.Role)) return Results.BadRequest(new { message = "Role is not assignable by organization managers." });
+
+    var email = request.Email.Trim().ToLowerInvariant();
+    var displayName = request.DisplayName.Trim();
+    var division = request.Division.Trim();
+    var unit = request.Unit.Trim();
+    if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(displayName) ||
+        string.IsNullOrWhiteSpace(division) || string.IsNullOrWhiteSpace(unit))
+    {
+        return Results.BadRequest(new { message = "Email, display name, division, and unit are required." });
+    }
+
+    await using var conn = await db.OpenConnectionAsync();
+    var currentUser = await FindUserByIdAsync(conn, http.User.UserId());
+    if (currentUser is null) return Results.Unauthorized();
+    if (!currentUser.CanManageDivision(division)) return Results.Forbid();
+    if (await FindUserByEmailAsync(conn, email) is not null)
+    {
+        return Results.Conflict(new { message = "An account already exists for this email." });
+    }
+
+    var password = PasswordHasher.Hash(request.Password);
+    var id = Guid.NewGuid();
+    await using var tx = await conn.BeginTransactionAsync();
+    await using (var cmd = new NpgsqlCommand("""
+        insert into users (id, email, display_name, role, division, unit, password_hash, password_salt, password_iterations, is_active)
+        values (@id, @email, @displayName, @role, @division, @unit, @hash, @salt, @iterations, true)
+        """, conn, tx))
+    {
+        cmd.Parameters.AddWithValue("id", id);
+        cmd.Parameters.AddWithValue("email", email);
+        cmd.Parameters.AddWithValue("displayName", displayName);
+        cmd.Parameters.AddWithValue("role", request.Role);
+        cmd.Parameters.AddWithValue("division", division);
+        cmd.Parameters.AddWithValue("unit", unit);
+        cmd.Parameters.AddWithValue("hash", password.Hash);
+        cmd.Parameters.AddWithValue("salt", password.Salt);
+        cmd.Parameters.AddWithValue("iterations", password.Iterations);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    await using (var dashCmd = new NpgsqlCommand("""
+        insert into dashboards (user_id, data)
+        values (@userId, '{"objectivesData":[]}'::jsonb)
+        """, conn, tx))
+    {
+        dashCmd.Parameters.AddWithValue("userId", id);
+        await dashCmd.ExecuteNonQueryAsync();
+    }
+
+    await AuditAsync(conn, currentUser.Id, "user.created", "users", id.ToString(), http.Connection.RemoteIpAddress?.ToString(), tx);
+    await tx.CommitAsync();
+
+    return Results.Created($"/api/users/{id}", new UserResponse(id, email, displayName, request.Role, division, unit, true, DateTime.UtcNow, DateTime.UtcNow));
+}).RequireAuthorization();
+
 app.MapPatch("/api/users/{userId:guid}/assignment", async (
     Guid userId,
     AssignmentRequest request,
@@ -595,6 +654,7 @@ record AttachmentRecord(Guid Id, Guid OwnerUserId, string OriginalFileName, stri
 record BootstrapAdminRequest(string BootstrapKey, string Email, string DisplayName, string Password, string? Division, string? Unit);
 record RegisterRequest(string Email, string DisplayName, string Password);
 record LoginRequest(string Email, string Password);
+record UserCreateRequest(string Email, string DisplayName, string Password, string Division, string Unit, string Role);
 record AssignmentRequest(string Division, string Unit, string Role);
 record SelfProfileRequest(string Division, string Unit);
 record UnitCreateRequest(string Name, string Division);
