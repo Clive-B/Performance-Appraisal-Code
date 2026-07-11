@@ -1,7 +1,10 @@
-using System.Data;
+﻿using System.Data;
+using System.IO.Compression;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Npgsql;
@@ -577,6 +580,26 @@ app.MapDelete("/api/attachments/{attachmentId:guid}", async (Guid attachmentId, 
     return Results.NoContent();
 }).RequireAuthorization();
 
+app.MapPost("/api/appraisal/import-pdf", async (IFormFile file, HttpContext http, NpgsqlDataSource db) =>
+{
+    if (file.Length == 0) return Results.BadRequest(new { message = "Empty PDF file." });
+    if (file.Length > 5 * 1024 * 1024) return Results.BadRequest(new { message = "Maximum PDF import size is 5 MB." });
+    if (!file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+    {
+        return Results.BadRequest(new { message = "Upload an NCA appraisal PDF file." });
+    }
+
+    await using var input = file.OpenReadStream();
+    using var memory = new MemoryStream();
+    await input.CopyToAsync(memory);
+    var result = NcaAppraisalPdf.ImportNextPeriodObjectives(memory.ToArray());
+
+    await using var conn = await db.OpenConnectionAsync();
+    await AuditAsync(conn, http.User.UserId(), "appraisal.pdf.import", "appraisal_pdf", file.FileName, http.Connection.RemoteIpAddress?.ToString());
+
+    return Results.Ok(result);
+}).RequireAuthorization().DisableAntiforgery();
+
 app.Run();
 
 static async Task<UserRecord?> FindUserByEmailAsync(NpgsqlConnection conn, string email)
@@ -762,3 +785,249 @@ record UnitCreateRequest(string Name, string Division);
 record UserResponse(Guid Id, string Email, string DisplayName, string Role, string? Division, string? Unit, bool IsActive, DateTime CreatedAt, DateTime UpdatedAt);
 record UnitResponse(Guid Id, string Name, string Division, bool Active);
 record AttachmentResponse(Guid Id, string Name, string ContentType, long Size, string DownloadUrl);
+record AppraisalImportResponse(List<ImportedObjective> Objectives, int ExtractedTextLength);
+record ImportedObjective(string Objective, int Weight, string KeyActionPoints, string KeyPerformanceIndicators, string DeliveryDate);
+
+static class NcaAppraisalPdf
+{
+    public static AppraisalImportResponse ImportNextPeriodObjectives(byte[] pdfBytes)
+    {
+        var text = ExtractText(pdfBytes);
+        var objectives = ExtractNextPeriodObjectives(text);
+        return new AppraisalImportResponse(objectives, text.Length);
+    }
+
+    private static string ExtractText(byte[] pdfBytes)
+    {
+        var pdf = Encoding.Latin1.GetString(pdfBytes);
+        var unicodeRefs = Regex.Matches(pdf, @"/ToUnicode\s+(\d+)\s+0\s+R")
+            .Select(m => int.Parse(m.Groups[1].Value))
+            .Distinct()
+            .ToList();
+
+        var maps = unicodeRefs.Select(obj => ParseCMap(pdf, obj)).Where(m => m.Count > 0).ToList();
+        var fontMaps = new Dictionary<string, Dictionary<int, string>>(StringComparer.OrdinalIgnoreCase);
+        if (maps.Count > 0) fontMaps["F7"] = maps[0];
+        if (maps.Count > 1) fontMaps["F8"] = maps[1];
+
+        var parts = new List<string>();
+        foreach (Match streamMatch in Regex.Matches(pdf, @"stream\r?\n(.*?)\r?\nendstream", RegexOptions.Singleline))
+        {
+            var streamBytes = Encoding.Latin1.GetBytes(streamMatch.Groups[1].Value);
+            var decodedBytes = TryInflate(streamBytes);
+            var content = Encoding.Latin1.GetString(decodedBytes);
+            if (!content.Contains("Tj", StringComparison.Ordinal) && !content.Contains("TJ", StringComparison.Ordinal)) continue;
+
+            var font = "F7";
+            foreach (Match token in Regex.Matches(content, @"/(F\d+)\s+\d+(?:\.\d+)?\s+Tf|<([0-9A-Fa-f]+)>\s*Tj|\[((?:.|\n)*?)\]\s*TJ", RegexOptions.Singleline))
+            {
+                if (token.Groups[1].Success)
+                {
+                    font = token.Groups[1].Value;
+                    continue;
+                }
+
+                if (token.Groups[2].Success)
+                {
+                    parts.Add(DecodeHexText(token.Groups[2].Value, font, fontMaps, maps));
+                    continue;
+                }
+
+                if (token.Groups[3].Success)
+                {
+                    var text = string.Concat(Regex.Matches(token.Groups[3].Value, @"<([0-9A-Fa-f]+)>")
+                        .Select(m => DecodeHexText(m.Groups[1].Value, font, fontMaps, maps)));
+                    parts.Add(text);
+                }
+            }
+        }
+
+        return CleanPdfText(string.Join("\n", parts));
+    }
+
+    private static Dictionary<int, string> ParseCMap(string pdf, int objectNumber)
+    {
+        var objectMatch = Regex.Match(pdf, $@"{objectNumber}\s+0\s+obj(.*?)endobj", RegexOptions.Singleline);
+        if (!objectMatch.Success) return [];
+        var streamMatch = Regex.Match(objectMatch.Groups[1].Value, @"stream\r?\n(.*?)\r?\nendstream", RegexOptions.Singleline);
+        if (!streamMatch.Success) return [];
+
+        var bytes = Encoding.Latin1.GetBytes(streamMatch.Groups[1].Value);
+        var cmap = Encoding.Latin1.GetString(TryInflate(bytes));
+        var map = new Dictionary<int, string>();
+
+        foreach (Match match in Regex.Matches(cmap, @"<([0-9A-Fa-f]{4})>\s+<([0-9A-Fa-f]{4})>"))
+        {
+            map[Convert.ToInt32(match.Groups[1].Value, 16)] = char.ConvertFromUtf32(Convert.ToInt32(match.Groups[2].Value, 16));
+        }
+
+        foreach (Match match in Regex.Matches(cmap, @"<([0-9A-Fa-f]{4})>\s+<([0-9A-Fa-f]{4})>\s+<([0-9A-Fa-f]{4})>"))
+        {
+            var start = Convert.ToInt32(match.Groups[1].Value, 16);
+            var end = Convert.ToInt32(match.Groups[2].Value, 16);
+            var baseCode = Convert.ToInt32(match.Groups[3].Value, 16);
+            for (var code = start; code <= end; code++)
+            {
+                map[code] = char.ConvertFromUtf32(baseCode + code - start);
+            }
+        }
+
+        return map;
+    }
+
+    private static byte[] TryInflate(byte[] bytes)
+    {
+        try
+        {
+            using var source = new MemoryStream(bytes);
+            using var zlib = new ZLibStream(source, CompressionMode.Decompress);
+            using var target = new MemoryStream();
+            zlib.CopyTo(target);
+            return target.ToArray();
+        }
+        catch
+        {
+            return bytes;
+        }
+    }
+
+    private static string DecodeHexText(string hex, string font, Dictionary<string, Dictionary<int, string>> fontMaps, List<Dictionary<int, string>> maps)
+    {
+        var bytes = Convert.FromHexString(hex);
+        var map = fontMaps.TryGetValue(font, out var fontMap) ? fontMap : maps.FirstOrDefault();
+        if (map is null) return "";
+
+        var text = new StringBuilder();
+        for (var i = 0; i + 1 < bytes.Length; i += 2)
+        {
+            var code = (bytes[i] << 8) + bytes[i + 1];
+            text.Append(map.TryGetValue(code, out var value) ? value : "");
+        }
+        return text.ToString();
+    }
+
+    private static string CleanPdfText(string text)
+    {
+        return text
+            .Replace('\u0005', ' ')
+            .Replace('\u001f', ':')
+            .Replace('\u0011', '\'')
+            .Replace("Â¶", "A")
+            .Replace("¶", "A")
+            .Replace("Compentencies", "Competencies")
+            .Replace("ChatGTP", "ChatGPT");
+    }
+
+    private static List<ImportedObjective> ExtractNextPeriodObjectives(string text)
+    {
+        var lines = text.Split('\n')
+            .Select(CleanLine)
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .ToList();
+        var flat = Collapse(lines);
+        var startMatch = Regex.Match(flat, @"Performance\s+Objectives\s+For\s+Next\s+Period", RegexOptions.IgnoreCase);
+        if (!startMatch.Success) return [];
+
+        var afterStart = flat[startMatch.Index..];
+        var deliveryMatch = Regex.Match(afterStart, @"Delivery\s+Date", RegexOptions.IgnoreCase);
+        if (!deliveryMatch.Success) return [];
+
+        var section = afterStart[(deliveryMatch.Index + deliveryMatch.Length)..];
+        var endMatch = Regex.Match(section, @"Overall\s+Total\s+Assessment\s+Score", RegexOptions.IgnoreCase);
+        if (endMatch.Success) section = section[..endMatch.Index];
+
+        section = Regex.Replace(section, @"Performance\s+Objectives\s+For\s+Next\s+Period", " ", RegexOptions.IgnoreCase);
+        section = Regex.Replace(section, @"Performance\s+Objectives|Key\s+Action\s+Points|Key\s+Performance\s+Indicators|Delivery\s+Date|Weight", " ", RegexOptions.IgnoreCase);
+        section = Regex.Replace(section, @"\s+", " ").Trim();
+
+        var objectives = new List<ImportedObjective>();
+        var cursor = 0;
+        foreach (Match dateMatch in Regex.Matches(section, @"\d{1,2}/\d{1,2}/\d{4}"))
+        {
+            var segment = section[cursor..(dateMatch.Index + dateMatch.Length)].Trim();
+            cursor = dateMatch.Index + dateMatch.Length;
+            var parsed = ParseObjectiveSegment(segment);
+            if (parsed is not null)
+            {
+                objectives.Add(parsed);
+            }
+        }
+
+        return objectives;
+    }
+
+    private static ImportedObjective? ParseObjectiveSegment(string segment)
+    {
+        var dateMatch = Regex.Match(segment, @"\d{1,2}/\d{1,2}/\d{4}\s*$");
+        if (!dateMatch.Success) return null;
+        var date = dateMatch.Value.Trim();
+        var bodyWithObjective = segment[..dateMatch.Index].Trim();
+        var weightMatch = Regex.Match(bodyWithObjective, @"\s(10|20|30|40|50|60|70|80|90|100)\s+(?=(i\.|1\.)\s)", RegexOptions.IgnoreCase);
+        if (!weightMatch.Success) return null;
+
+        var objective = bodyWithObjective[..weightMatch.Index].Trim();
+        var weight = int.Parse(weightMatch.Groups[1].Value);
+        var body = bodyWithObjective[(weightMatch.Index + weightMatch.Length)..].Trim();
+        var split = FindSecondListStart(body);
+        var actionPoints = split > 0 ? body[..split].Trim() : body.Trim();
+        var kpis = split > 0 ? body[split..].Trim() : "";
+
+        objective = CleanTextFragment(TrimPreviousPageContinuation(objective));
+        actionPoints = CleanTextFragment(actionPoints);
+        kpis = CleanTextFragment(kpis);
+        if (string.IsNullOrWhiteSpace(objective)) return null;
+        return new ImportedObjective(objective, weight, actionPoints, kpis, date);
+    }
+
+    private static string TrimPreviousPageContinuation(string objective)
+    {
+        objective = Regex.Replace(objective, @"\s+", " ").Trim();
+        var continuationBreak = objective.LastIndexOf(". ", StringComparison.Ordinal);
+        if (objective.Length > 180 && continuationBreak > 80 && continuationBreak < objective.Length - 20)
+        {
+            objective = objective[(continuationBreak + 2)..].Trim();
+        }
+        return objective;
+    }
+
+    private static int FindSecondListStart(string body)
+    {
+        var matches = Regex.Matches(" " + body, @"\s(i\.|1\.)\s");
+        if (matches.Count < 2) return -1;
+        return Math.Max(0, matches[1].Index);
+    }
+
+    private static string Collapse(IEnumerable<string> lines) => Regex.Replace(string.Join(" ", lines), @"\s+", " ").Trim();
+
+    private static string CleanLine(string line)
+    {
+        return CleanTextFragment(line);
+    }
+
+    private static string CleanTextFragment(string line)
+    {
+        var cleaned = Regex.Replace(line.Trim(), @"[\u0000-\u0008\u000B-\u001F]", " ");
+        cleaned = Regex.Replace(cleaned, @"\bT\s+ech\b", "Tech", RegexOptions.IgnoreCase);
+        cleaned = Regex.Replace(cleaned, @"\bT\s+wo\b", "Two", RegexOptions.IgnoreCase);
+        cleaned = Regex.Replace(cleaned, @"\bT\s+elecel\b", "Telecel", RegexOptions.IgnoreCase);
+        cleaned = Regex.Replace(cleaned, @"\bA\s+I\b", "AI", RegexOptions.IgnoreCase);
+        cleaned = Regex.Replace(cleaned, @"\bA\s+T\b", "AT", RegexOptions.IgnoreCase);
+        cleaned = Regex.Replace(cleaned, @"\bor\s+ganiz", "organiz", RegexOptions.IgnoreCase);
+        cleaned = Regex.Replace(cleaned, @"\bemer\s+ging", "emerging", RegexOptions.IgnoreCase);
+        cleaned = Regex.Replace(cleaned, @"\baf\s+fairs", "affairs", RegexOptions.IgnoreCase);
+        cleaned = Regex.Replace(cleaned, @"\bstaf\s+f\b", "staff", RegexOptions.IgnoreCase);
+        cleaned = Regex.Replace(cleaned, @"\bef\s+fect", "effect", RegexOptions.IgnoreCase);
+        cleaned = Regex.Replace(cleaned, @"\bef\s+ficien", "efficien", RegexOptions.IgnoreCase);
+        cleaned = Regex.Replace(cleaned, @"\btar\s+gets\b", "targets", RegexOptions.IgnoreCase);
+        cleaned = Regex.Replace(cleaned, @"\blar\s+ge\b", "large", RegexOptions.IgnoreCase);
+        return Regex.Replace(cleaned, @"\s+", " ");
+    }
+
+    private static string Normalize(string line) => Regex.Replace(line.ToLowerInvariant(), @"[^a-z0-9]+", "");
+
+    private static bool IsNextPeriodHeader(string line)
+    {
+        var normalized = Normalize(line);
+        return normalized is "performanceobjectivesfornextperiod" or "performanceobjectives" or "weight" or "keyactionpoints" or "keyperformanceindicators" or "deliverydate";
+    }
+}

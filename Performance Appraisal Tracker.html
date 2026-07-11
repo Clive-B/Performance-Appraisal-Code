@@ -797,6 +797,86 @@
         .action-btn.reminders-btn:hover {
             background-color: #d35400;
         }
+
+        .action-btn.import-btn {
+            background-color: #16a085;
+            color: white;
+            border-color: #16a085;
+        }
+
+        .action-btn.import-btn:hover {
+            background-color: #138d75;
+        }
+
+        .action-btn.draft-btn {
+            background-color: #34495e;
+            color: white;
+            border-color: #34495e;
+        }
+
+        .action-btn.draft-btn:hover {
+            background-color: #2c3e50;
+        }
+
+        .objective-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .objective-meta span {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 8px;
+            background: #eef6fb;
+            color: #1f4e79;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 700;
+        }
+
+        .appraisal-import-grid {
+            display: grid;
+            gap: 12px;
+            max-height: 360px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .appraisal-import-item {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 12px;
+            background: #f8fafc;
+        }
+
+        .appraisal-import-item h4 {
+            margin: 0 0 8px 0;
+            color: var(--primary-color);
+            font-size: 0.98rem;
+        }
+
+        .appraisal-import-item p {
+            margin: 6px 0;
+            font-size: 0.9rem;
+            color: #34495e;
+        }
+
+        .appraisal-draft-output {
+            width: 100%;
+            min-height: 420px;
+            resize: vertical;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: #1f2937;
+            background: #f8fafc;
+        }
         
         .objectives-container {
             display: grid;
@@ -2122,6 +2202,12 @@
                     <button class="action-btn reminders-btn" id="show-reminders">
                         <i class="fas fa-bell"></i> View Reminders
                     </button>
+                    <button class="action-btn import-btn" id="import-appraisal-pdf">
+                        <i class="fas fa-file-import"></i> Import NCA PDF
+                    </button>
+                    <button class="action-btn draft-btn" id="open-appraisal-draft">
+                        <i class="fas fa-clipboard-check"></i> Appraisal Draft
+                    </button>
                     <button class="action-btn save-btn" id="save-progress">
                         <i class="fas fa-save"></i> Save Progress
                     </button>
@@ -2276,6 +2362,47 @@
                 </div>
             </div>
             
+            <!-- Appraisal PDF Import Modal -->
+            <div class="modal-overlay" id="appraisal-import-modal">
+                <div class="modal" style="max-width: 900px;">
+                    <h3><i class="fas fa-file-import"></i> Import Previous NCA Appraisal PDF</h3>
+                    <p>Upload the official NCA appraisal PDF from the previous period. The app will extract the "Performance Objectives For Next Period" section and let you review it before applying.</p>
+                    <div style="margin: 18px 0;">
+                        <input type="file" id="appraisal-pdf-file" accept="application/pdf,.pdf" style="width:100%;padding:10px;border:1px solid var(--border-color);border-radius:6px;">
+                    </div>
+                    <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:15px;">
+                        <label><input type="radio" name="appraisal-import-mode" value="append" checked> Append to current objectives</label>
+                        <label><input type="radio" name="appraisal-import-mode" value="replace"> Replace current objectives</label>
+                    </div>
+                    <div class="appraisal-import-grid" id="appraisal-import-preview">
+                        <div class="empty-state" style="padding:20px;">
+                            <i class="fas fa-file-pdf"></i>
+                            <h3>No PDF imported yet</h3>
+                            <p>Choose a PDF and click Extract Objectives.</p>
+                        </div>
+                    </div>
+                    <div class="modal-buttons">
+                        <button class="modal-btn secondary" id="cancel-appraisal-import">Close</button>
+                        <button class="modal-btn secondary" id="extract-appraisal-pdf">Extract Objectives</button>
+                        <button class="modal-btn primary" id="apply-appraisal-import">Apply to Dashboard</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Appraisal Draft Modal -->
+            <div class="modal-overlay" id="appraisal-draft-modal">
+                <div class="modal" style="max-width: 1000px;">
+                    <h3><i class="fas fa-clipboard-check"></i> NCA Appraisal Draft</h3>
+                    <p>This draft mirrors the official NCA appraisal portal sections. Review, edit, and copy the text into the portal.</p>
+                    <textarea class="appraisal-draft-output" id="appraisal-draft-output"></textarea>
+                    <div class="modal-buttons">
+                        <button class="modal-btn secondary" id="close-appraisal-draft">Close</button>
+                        <button class="modal-btn secondary" id="refresh-appraisal-draft">Refresh Draft</button>
+                        <button class="modal-btn primary" id="copy-appraisal-draft">Copy Draft</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Reminders Modal -->
             <div class="modal-overlay" id="reminders-modal">
                 <div class="modal">
@@ -3273,6 +3400,10 @@
             return {
                 id: source.id || (index + 1),
                 title: source.title || source.name || 'Untitled Objective',
+                weight: Number.isFinite(Number(source.weight)) ? Number(source.weight) : null,
+                dueDate: source.dueDate || source.deliveryDate || '',
+                importedFrom: source.importedFrom || '',
+                appraisalAssessment: source.appraisalAssessment || '',
                 status: source.status || 'not-started',
                 progress: Number.isFinite(Number(source.progress)) ? Math.max(0, Math.min(100, Number(source.progress))) : 0,
                 actionPoints: actionPoints.map(normalizeTask),
@@ -3463,10 +3594,18 @@
             }
             
             const progressColor = getProgressColor(objective.progress);
+            const metaItems = [];
+            if (objective.weight !== null && objective.weight !== undefined) metaItems.push(`<span><i class="fas fa-balance-scale"></i> Weight: ${escapeHTML(objective.weight)}%</span>`);
+            if (objective.dueDate) metaItems.push(`<span><i class="fas fa-calendar-alt"></i> Due: ${escapeHTML(objective.dueDate)}</span>`);
+            if (objective.importedFrom) metaItems.push(`<span><i class="fas fa-file-import"></i> ${escapeHTML(objective.importedFrom)}</span>`);
+            const metaHTML = metaItems.length ? `<div class="objective-meta">${metaItems.join('')}</div>` : '';
             
             card.innerHTML = `
                 <div class="card-header">
-                    <div class="objective-title">${escapeHTML(getObjectiveDisplayTitle(objective))}</div>
+                    <div style="flex:1;margin-right:15px;">
+                        <div class="objective-title">${escapeHTML(getObjectiveDisplayTitle(objective))}</div>
+                        ${metaHTML}
+                    </div>
                     <input type="text" class="objective-title-input" value="${escapeAttribute(getObjectiveEditTitle(objective))}">
                     
                     <div class="status-badge ${statusClass}">${statusText}</div>
@@ -4093,6 +4232,205 @@
             }
         }
 
+        let importedAppraisalObjectives = [];
+
+        function splitImportedList(text) {
+            const cleaned = String(text || '').replace(/\s+/g, ' ').trim();
+            if (!cleaned) return [];
+            const parts = cleaned
+                .split(/(?=\s(?:i{1,3}|iv|v|vi{0,3}|x|\d+)\.\s)/i)
+                .map(part => part.replace(/^(?:i{1,3}|iv|v|vi{0,3}|x|\d+)\.\s*/i, '').trim())
+                .filter(Boolean);
+            return (parts.length ? parts : [cleaned]).map(item => ({
+                text: item,
+                completed: false,
+                notes: [],
+                attachments: []
+            }));
+        }
+
+        function renderImportedAppraisalPreview(objectives) {
+            const preview = document.getElementById('appraisal-import-preview');
+            if (!preview) return;
+            if (!objectives.length) {
+                preview.innerHTML = `
+                    <div class="empty-state" style="padding:20px;">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <h3>No objectives found</h3>
+                        <p>The PDF did not expose a readable "Performance Objectives For Next Period" section.</p>
+                    </div>
+                `;
+                return;
+            }
+            preview.innerHTML = objectives.map((item, index) => `
+                <div class="appraisal-import-item">
+                    <h4>${index + 1}. ${escapeHTML(item.objective || 'Untitled Objective')}</h4>
+                    <p><strong>Weight:</strong> ${escapeHTML(item.weight ?? '')}% ${item.deliveryDate ? `<strong style="margin-left:12px;">Delivery:</strong> ${escapeHTML(item.deliveryDate)}` : ''}</p>
+                    <p><strong>Key Action Points:</strong> ${escapeHTML(item.keyActionPoints || '')}</p>
+                    <p><strong>KPIs:</strong> ${escapeHTML(item.keyPerformanceIndicators || '')}</p>
+                </div>
+            `).join('');
+        }
+
+        async function extractAppraisalPdf() {
+            const input = document.getElementById('appraisal-pdf-file');
+            const file = input && input.files ? input.files[0] : null;
+            if (!file) {
+                showNotification('Choose an NCA appraisal PDF first.');
+                return;
+            }
+            if (!window.ncaApiFetch) {
+                showNotification('PDF import is available in NCA intranet API mode only.');
+                return;
+            }
+
+            const form = new FormData();
+            form.append('file', file);
+            const preview = document.getElementById('appraisal-import-preview');
+            if (preview) preview.innerHTML = '<div class="empty-state" style="padding:20px;"><i class="fas fa-spinner fa-spin"></i><h3>Extracting objectives...</h3><p>Please wait.</p></div>';
+
+            try {
+                const result = await window.ncaApiFetch('/api/appraisal/import-pdf', {method: 'POST', body: form, formData: true});
+                importedAppraisalObjectives = Array.isArray(result.objectives) ? result.objectives : [];
+                renderImportedAppraisalPreview(importedAppraisalObjectives);
+                showNotification(`Extracted ${importedAppraisalObjectives.length} objective(s) from the PDF.`);
+            } catch (error) {
+                console.error('PDF import error:', error);
+                importedAppraisalObjectives = [];
+                renderImportedAppraisalPreview([]);
+                showNotification(error.message || 'Could not import appraisal PDF.');
+            }
+        }
+
+        function applyImportedAppraisalObjectives() {
+            if (!importedAppraisalObjectives.length) {
+                showNotification('Extract objectives from a PDF before applying.');
+                return;
+            }
+            const mode = document.querySelector('input[name="appraisal-import-mode"]:checked')?.value || 'append';
+            const maxId = mode === 'replace' ? 0 : objectivesData.reduce((max, obj) => Math.max(max, Number(obj.id) || 0), 0);
+            const mapped = importedAppraisalObjectives.map((item, index) => ({
+                id: maxId + index + 1,
+                title: item.objective || `Imported Objective ${index + 1}`,
+                weight: Number.isFinite(Number(item.weight)) ? Number(item.weight) : null,
+                dueDate: item.deliveryDate || '',
+                importedFrom: 'NCA PDF',
+                status: 'not-started',
+                progress: 0,
+                actionPoints: splitImportedList(item.keyActionPoints),
+                kpis: splitImportedList(item.keyPerformanceIndicators),
+                appraisalAssessment: ''
+            }));
+
+            objectivesData = mode === 'replace' ? mapped : objectivesData.concat(mapped);
+            renderObjectives();
+            updateStats();
+            saveDashboard();
+            document.getElementById('appraisal-import-modal')?.classList.remove('show');
+            showNotification(`Applied ${mapped.length} imported objective(s).`);
+        }
+
+        function collectEvidenceText(objective) {
+            const evidence = [];
+            const completedActions = (objective.actionPoints || []).filter(task => task.completed).map(task => task.text);
+            const completedKpis = (objective.kpis || []).filter(task => task.completed).map(task => task.text);
+            const notes = [];
+            const attachments = [];
+            [...(objective.actionPoints || []), ...(objective.kpis || [])].forEach(task => {
+                (task.notes || []).forEach(note => {
+                    if (note && note.text) notes.push(note.text);
+                });
+                (task.attachments || []).forEach(att => {
+                    if (att && att.name) attachments.push(att.name);
+                });
+            });
+            if (completedActions.length) evidence.push(`Completed action points: ${completedActions.join('; ')}.`);
+            if (completedKpis.length) evidence.push(`Completed KPIs: ${completedKpis.join('; ')}.`);
+            if (notes.length) evidence.push(`Evidence notes: ${notes.slice(0, 6).join('; ')}.`);
+            if (attachments.length) evidence.push(`Supporting attachments uploaded: ${attachments.slice(0, 6).join(', ')}.`);
+            if (!evidence.length) evidence.push('Progress evidence is not yet recorded in the tracker.');
+            return evidence.join(' ');
+        }
+
+        function buildObjectiveAssessment(objective) {
+            const evidence = collectEvidenceText(objective);
+            const progress = Number(objective.progress) || 0;
+            if (progress >= 80) return `Substantial progress was made on this objective. ${evidence}`;
+            if (progress >= 40) return `Meaningful progress was made on this objective, with outstanding items still being tracked. ${evidence}`;
+            if (progress > 0) return `Initial progress was made on this objective and further execution is required. ${evidence}`;
+            return `This objective is captured for the review period and requires further evidence updates. ${evidence}`;
+        }
+
+        function buildAppraisalDraft() {
+            const totalWeight = objectivesData.reduce((sum, obj) => sum + (Number(obj.weight) || 0), 0);
+            const lines = [];
+            lines.push('NCA APPRAISAL DRAFT');
+            lines.push(`Review Period: ${reviewPeriod.display}`);
+            lines.push(`Generated: ${new Date().toLocaleString()}`);
+            lines.push('');
+            lines.push('PERFORMANCE OBJECTIVES');
+            lines.push('Use this section to fill the official portal Performance Objectives assessment/evaluation fields.');
+            lines.push('');
+            objectivesData.forEach((objective, index) => {
+                lines.push(`${index + 1}. ${getObjectiveDisplayTitle(objective)}`);
+                lines.push(`Weight: ${objective.weight ?? ''}${objective.weight !== null && objective.weight !== undefined ? '%' : ''}`);
+                if (objective.dueDate) lines.push(`Delivery Date: ${objective.dueDate}`);
+                lines.push(`Assessment/Evaluation: ${objective.appraisalAssessment || buildObjectiveAssessment(objective)}`);
+                lines.push(`Suggested Rating: ${objective.progress >= 80 ? '4' : objective.progress >= 50 ? '3' : objective.progress > 0 ? '2' : ''}`);
+                lines.push('');
+            });
+            if (totalWeight) lines.push(`Total imported objective weight: ${totalWeight}%`);
+            lines.push('');
+            lines.push('CORE COMPETENCIES');
+            lines.push('The competency names and weights remain fixed. Edit only the assessment/evaluation text if needed.');
+            lines.push('');
+            getCoreCompetencyDrafts().forEach(item => {
+                lines.push(`${item.name} | Weight: ${item.weight}%`);
+                lines.push(`Assessment/Evaluation: ${item.assessment}`);
+                lines.push('Suggested Rating: 4');
+                lines.push('');
+            });
+            lines.push('CORE VALUES');
+            lines.push('The values remain fixed. Edit only the assessment/evaluation text if needed.');
+            lines.push('');
+            getCoreValueDrafts().forEach(item => {
+                lines.push(`${item.name}`);
+                lines.push(`Assessment/Evaluation: ${item.assessment}`);
+                lines.push('Suggested Rating: L');
+                lines.push('');
+            });
+            return lines.join('\n');
+        }
+
+        function getCoreCompetencyDrafts() {
+            const completedCount = objectivesData.reduce((sum, obj) => sum + [...(obj.actionPoints || []), ...(obj.kpis || [])].filter(task => task.completed).length, 0);
+            const evidenceCount = objectivesData.reduce((sum, obj) => sum + [...(obj.actionPoints || []), ...(obj.kpis || [])].reduce((inner, task) => inner + (task.notes || []).length + (task.attachments || []).length, 0), 0);
+            return [
+                {name: 'Commitment to Achieve', weight: 20, assessment: `Demonstrated commitment by tracking ${objectivesData.length} objective(s), completing ${completedCount} evidence-linked task(s), and maintaining progress records throughout the review period.`},
+                {name: 'Communicating with Impact', weight: 20, assessment: 'Communicated progress through documented notes, updates, and evidence records linked to objectives and KPIs.'},
+                {name: 'Planning, Implementing & Controlling', weight: 20, assessment: 'Planned work through defined action points and KPIs, monitored progress, and used the tracker to control delivery against the review objectives.'},
+                {name: 'Critical Problem Solving', weight: 20, assessment: 'Used structured evidence, task follow-up, and dashboard monitoring to identify delivery gaps and guide corrective action.'},
+                {name: 'Developing People & Teams', weight: 20, assessment: `Supported knowledge sharing and team delivery through tracked work items and ${evidenceCount} note/attachment evidence record(s).`}
+            ];
+        }
+
+        function getCoreValueDrafts() {
+            return [
+                {name: 'Teamwork - Combining efforts towards achieving a common goal', assessment: 'Collaborated with colleagues and stakeholders to move assigned objectives forward and support shared divisional outcomes.'},
+                {name: 'Accountability - Account and accept responsibility for your activities', assessment: 'Maintained traceable progress records, notes, and evidence against assigned objectives and KPIs.'},
+                {name: 'Consistency - Reliable conduct to facilitate fairness and accuracy', assessment: 'Used consistent tracking of action points, KPIs, progress, and evidence throughout the review period.'},
+                {name: 'Trust - Assured reliance on character, ability and strengths', assessment: 'Demonstrated reliability by documenting work done and preserving supporting evidence for review.'},
+                {name: 'Innovation - Initiative that transforms lives and work processes', assessment: 'Used the performance tracker and digital evidence workflow to improve appraisal preparation and reduce manual work.'},
+                {name: 'Transparency - Striving to earn your trust and loyalty', assessment: 'Kept progress, challenges, and evidence visible through structured objective tracking and appraisal draft preparation.'}
+            ];
+        }
+
+        function openAppraisalDraft() {
+            const output = document.getElementById('appraisal-draft-output');
+            if (output) output.value = buildAppraisalDraft();
+            document.getElementById('appraisal-draft-modal')?.classList.add('show');
+        }
+
         // Setup dashboard event listeners
         function setupDashboardEventListeners() {
             setupUserMenuEventListeners();
@@ -4219,6 +4557,41 @@
             document.getElementById('generate-pdf-now').addEventListener('click', function() {
                 document.getElementById('pdf-modal').classList.remove('show');
                 generatePDF();
+            });
+
+            document.getElementById('import-appraisal-pdf')?.addEventListener('click', function() {
+                importedAppraisalObjectives = [];
+                renderImportedAppraisalPreview([]);
+                document.getElementById('appraisal-import-modal')?.classList.add('show');
+            });
+
+            document.getElementById('cancel-appraisal-import')?.addEventListener('click', function() {
+                document.getElementById('appraisal-import-modal')?.classList.remove('show');
+            });
+
+            document.getElementById('extract-appraisal-pdf')?.addEventListener('click', extractAppraisalPdf);
+            document.getElementById('apply-appraisal-import')?.addEventListener('click', applyImportedAppraisalObjectives);
+
+            document.getElementById('open-appraisal-draft')?.addEventListener('click', openAppraisalDraft);
+            document.getElementById('close-appraisal-draft')?.addEventListener('click', function() {
+                document.getElementById('appraisal-draft-modal')?.classList.remove('show');
+            });
+            document.getElementById('refresh-appraisal-draft')?.addEventListener('click', function() {
+                const output = document.getElementById('appraisal-draft-output');
+                if (output) output.value = buildAppraisalDraft();
+            });
+            document.getElementById('copy-appraisal-draft')?.addEventListener('click', async function() {
+                const output = document.getElementById('appraisal-draft-output');
+                if (!output) return;
+                try {
+                    await navigator.clipboard.writeText(output.value);
+                    showNotification('Appraisal draft copied to clipboard.');
+                } catch (_) {
+                    output.focus();
+                    output.select();
+                    document.execCommand('copy');
+                    showNotification('Appraisal draft copied to clipboard.');
+                }
             });
             
             // Show reminders button
