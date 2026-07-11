@@ -77,3 +77,9 @@ powershell -ExecutionPolicy Bypass -File tools\local-intranet-smoke.ps1
 ```
 
 The script checks API health, logs in, saves a small dashboard marker, reads it back from PostgreSQL, and fails if the round trip does not match.
+
+To verify role boundaries with deterministic test users, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\role-access-smoke.ps1
+```

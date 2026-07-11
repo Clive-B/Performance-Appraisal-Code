@@ -19,6 +19,19 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.ExpireTimeSpan = TimeSpan.FromHours(8);
         options.LoginPath = "/api/auth/login";
         options.AccessDeniedPath = "/api/auth/forbidden";
+        options.Events = new CookieAuthenticationEvents
+        {
+            OnRedirectToLogin = context =>
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                return Task.CompletedTask;
+            },
+            OnRedirectToAccessDenied = context =>
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Services.AddAuthorization();
@@ -250,7 +263,7 @@ app.MapGet("/api/dashboard/{userId:guid}", async (Guid userId, HttpContext http,
     var currentUser = await FindUserByIdAsync(conn, http.User.UserId());
     var targetUser = await FindUserByIdAsync(conn, userId);
     if (currentUser is null || targetUser is null) return Results.NotFound();
-    if (currentUser.Id != targetUser.Id && !currentUser.CanManageUser(targetUser)) return Results.Forbid();
+    if (!currentUser.CanViewDashboard(targetUser)) return Results.Forbid();
 
     await using var cmd = new NpgsqlCommand("select data from dashboards where user_id = @userId", conn);
     cmd.Parameters.AddWithValue("userId", userId);
@@ -264,11 +277,17 @@ app.MapGet("/api/users", async (HttpContext http, NpgsqlDataSource db) =>
     var currentUser = await FindUserByIdAsync(conn, http.User.UserId());
     if (currentUser is null) return Results.Unauthorized();
 
-    var sql = currentUser.CanManageAll()
-        ? "select id, email, display_name, role, division, unit, is_active, created_at, updated_at from users order by display_name"
-        : "select id, email, display_name, role, division, unit, is_active, created_at, updated_at from users where division = @division order by display_name";
+    var sql = currentUser.UserListScope() switch
+    {
+        UserVisibilityScope.All => "select id, email, display_name, role, division, unit, is_active, created_at, updated_at from users order by display_name",
+        UserVisibilityScope.Division => "select id, email, display_name, role, division, unit, is_active, created_at, updated_at from users where division = @division order by display_name",
+        UserVisibilityScope.Unit => "select id, email, display_name, role, division, unit, is_active, created_at, updated_at from users where division = @division and unit = @unit order by display_name",
+        _ => "select id, email, display_name, role, division, unit, is_active, created_at, updated_at from users where id = @id order by display_name"
+    };
     await using var cmd = new NpgsqlCommand(sql, conn);
-    if (!currentUser.CanManageAll()) cmd.Parameters.AddWithValue("division", currentUser.Division ?? "");
+    cmd.Parameters.AddWithValue("id", currentUser.Id);
+    cmd.Parameters.AddWithValue("division", currentUser.Division ?? "");
+    cmd.Parameters.AddWithValue("unit", currentUser.Unit ?? "");
 
     var users = new List<UserResponse>();
     await using var reader = await cmd.ExecuteReaderAsync();
@@ -646,8 +665,17 @@ static async Task AuditAsync(NpgsqlConnection conn, Guid? userId, string action,
 static class Roles
 {
     public const string SystemAdmin = "systemAdmin";
+    public const string UnitLead = "unitLead";
     public static readonly HashSet<string> DirectorLevel = ["divisionalHead", "director", "secretariat", "deputyDirectorGeneral"];
     public static readonly HashSet<string> ManagerAssignable = ["employee", "unitLead", "divisionalHead", "director", "secretariat", "deputyDirectorGeneral"];
+}
+
+enum UserVisibilityScope
+{
+    Self,
+    Unit,
+    Division,
+    All
 }
 
 static class ClaimsPrincipalExtensions
@@ -705,6 +733,19 @@ record UserRecord(
     public bool CanManageAll() => Role == Roles.SystemAdmin;
     public bool CanManageDivision(string division) => CanManageAll() || (Roles.DirectorLevel.Contains(Role) && Division == division);
     public bool CanManageUser(UserRecord target) => CanManageAll() || (target.Division is not null && CanManageDivision(target.Division));
+    public bool CanViewDashboard(UserRecord target) =>
+        Id == target.Id ||
+        CanManageUser(target) ||
+        (Role == Roles.UnitLead && Division == target.Division && Unit == target.Unit);
+
+    public UserVisibilityScope UserListScope() =>
+        CanManageAll()
+            ? UserVisibilityScope.All
+            : Roles.DirectorLevel.Contains(Role)
+                ? UserVisibilityScope.Division
+                : Role == Roles.UnitLead
+                    ? UserVisibilityScope.Unit
+                    : UserVisibilityScope.Self;
 }
 
 record AttachmentRecord(Guid Id, Guid OwnerUserId, string OriginalFileName, string ContentType, long SizeBytes, string StoragePath);
