@@ -40,7 +40,9 @@ Open the URL shown by `dotnet run`, usually:
 http://localhost:5247
 ```
 
-When served from `localhost`, the dashboard automatically enters NCA intranet API mode and routes Firebase-style calls to `/api/*`.
+The dashboard uses NCA intranet API mode by default and routes Firebase-style calls to `/api/*`.
+
+To force the older Firebase browser path for comparison, append `?firebase=1` to the URL.
 
 ## First Admin
 
@@ -64,6 +66,12 @@ admin@nca.gov
 ChangeThisPassword!
 ```
 
-## Current Limitation
+## Smoke Test
 
-This local machine does not currently have PostgreSQL or Docker installed, so login/save testing cannot complete until PostgreSQL is installed or an external PostgreSQL connection string is supplied.
+After the API is running and the first admin exists, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\local-intranet-smoke.ps1
+```
+
+The script checks API health, logs in, saves a small dashboard marker, reads it back from PostgreSQL, and fails if the round trip does not match.

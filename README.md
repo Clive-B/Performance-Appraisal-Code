@@ -39,7 +39,7 @@ The intranet backend has been added and builds successfully with .NET 8. It prov
 - attachment upload/download/delete using server storage
 - audit logging for key actions
 
-The existing HTML frontend still needs to be rewired from Firebase SDK calls to `/api/*` calls before the Firebase dependency can be fully removed from the browser experience.
+The HTML frontend is now connected to the intranet API by default through a compatibility layer that routes existing Firebase-style calls to `/api/*`. Add `?firebase=1` to the URL only when you intentionally want to test the older Firebase path.
 
 Build the intranet API:
 

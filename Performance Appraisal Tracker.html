@@ -2387,7 +2387,7 @@
         // FIREBASE INTEGRATION
         // =========================
 
-        const NCA_INTRAnet_API_MODE = ['localhost', '127.0.0.1'].includes(window.location.hostname) && !window.location.search.includes('firebase=1');
+        const NCA_INTRAnet_API_MODE = !window.location.search.includes('firebase=1');
 
         function createNcaApiFirebaseShim() {
             const apiBase = '';
