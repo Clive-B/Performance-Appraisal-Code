@@ -52,7 +52,7 @@ Client-side role checks are only for UI convenience. Firestore rules must be the
 
 - employees can write only their own dashboard
 - unit members can read only their unit's visible profiles/dashboards
-- divisional heads/directors can read their division
+- director-level roles can read/manage their division: Divisional Head, Director, Secretariat, and Deputy Director General
 - system administrators can perform administrative actions
 - destructive operations are denied to ordinary users
 

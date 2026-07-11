@@ -22,6 +22,14 @@ service cloud.firestore {
       return signedIn() && (isPrimaryAdmin() || currentProfile().role == 'systemAdmin' || currentProfile().isAdmin == true);
     }
 
+    function isDirectorLevelRole(role) {
+      return role in ['divisionalHead', 'director', 'secretariat', 'deputyDirectorGeneral'];
+    }
+
+    function isManagerAssignableRole(role) {
+      return role in ['employee', 'unitLead', 'divisionalHead', 'director', 'secretariat', 'deputyDirectorGeneral'];
+    }
+
     function sameDivision(division) {
       return signedIn() && currentProfile().division == division;
     }
@@ -31,7 +39,7 @@ service cloud.firestore {
     }
 
     function canManageDivision(division) {
-      return isSystemAdmin() || (sameDivision(division) && currentProfile().role in ['divisionalHead', 'director']);
+      return isSystemAdmin() || (sameDivision(division) && isDirectorLevelRole(currentProfile().role));
     }
 
     function canReadOrgProfile(profile) {
@@ -76,7 +84,8 @@ service cloud.firestore {
         && request.auth.uid != userId
         && canManageDivision(resource.data.division)
         && request.resource.data.division == resource.data.division
-        && request.resource.data.isAdmin == resource.data.isAdmin
+        && request.resource.data.isAdmin == false
+        && isManagerAssignableRole(request.resource.data.role)
         && request.resource.data.email == resource.data.email
         && request.resource.data.uid == resource.data.uid;
     }
