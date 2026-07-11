@@ -1,6 +1,8 @@
 # NCA Performance Appraisal Progress Dashboard
 
-Single-page Firebase-backed dashboard for tracking performance objectives, action points, KPIs, notes, attachments, reminders, and division/unit reporting.
+Performance appraisal dashboard for tracking objectives, action points, KPIs, notes, attachments, reminders, and division/unit reporting.
+
+The original build is a single-page Firebase-backed dashboard. The repo now also contains the start of an NCA intranet backend that replaces Firebase with ASP.NET Core and PostgreSQL.
 
 ## Current Deployment State
 
@@ -22,6 +24,29 @@ This repo contains a deployable static HTML build plus Firebase configuration sc
 - `firebase.json` - Firebase Hosting, Firestore, and Storage rules configuration
 - `firestore.rules` - security rules for users, dashboards, units, and audit logs
 - `storage.rules` - security rules for user-owned attachment uploads
+- `backend/Appraisal.Api` - ASP.NET Core API for NCA intranet/PostgreSQL hosting
+- `database/postgresql-schema.sql` - PostgreSQL schema for the intranet backend
+- `docs/nca-intranet-postgresql-migration.md` - server migration notes and checklist
+
+## NCA Intranet / PostgreSQL Track
+
+The intranet backend has been added and builds successfully with .NET 8. It provides:
+
+- local PostgreSQL-backed login sessions
+- user/profile/role storage
+- personal dashboard JSON storage in PostgreSQL
+- unit management endpoints
+- attachment upload/download/delete using server storage
+- audit logging for key actions
+
+The existing HTML frontend still needs to be rewired from Firebase SDK calls to `/api/*` calls before the Firebase dependency can be fully removed from the browser experience.
+
+Build the intranet API:
+
+```powershell
+$env:DOTNET_CLI_HOME="$PWD\.dotnet"
+dotnet build backend\Appraisal.Api\Appraisal.Api.csproj
+```
 
 ## Firebase Setup
 

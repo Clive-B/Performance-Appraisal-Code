@@ -2,3 +2,7 @@ backups/
 *.log
 .firebase/
 .firebaserc.local
+.dotnet/
+**/bin/
+**/obj/
+**/App_Data/
