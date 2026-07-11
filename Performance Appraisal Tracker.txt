@@ -2387,6 +2387,290 @@
         // FIREBASE INTEGRATION
         // =========================
 
+        const NCA_INTRAnet_API_MODE = ['localhost', '127.0.0.1'].includes(window.location.hostname) && !window.location.search.includes('firebase=1');
+
+        function createNcaApiFirebaseShim() {
+            const apiBase = '';
+            const listeners = [];
+
+            async function apiFetch(path, options = {}) {
+                const fetchOptions = {
+                    method: options.method || 'GET',
+                    credentials: 'include',
+                    headers: options.formData ? {} : {'Content-Type': 'application/json'}
+                };
+                if (options.body !== undefined) fetchOptions.body = options.formData ? options.body : JSON.stringify(options.body);
+                const response = await fetch(apiBase + path, fetchOptions);
+                if (!response.ok) {
+                    let message = response.statusText || 'Request failed';
+                    try {
+                        const error = await response.json();
+                        message = error.message || message;
+                    } catch (_) {}
+                    const err = new Error(message);
+                    err.status = response.status;
+                    throw err;
+                }
+                if (response.status === 204) return null;
+                const text = await response.text();
+                return text ? JSON.parse(text) : null;
+            }
+
+            function toFirebaseUser(user) {
+                if (!user) return null;
+                return {
+                    uid: user.id,
+                    email: user.email,
+                    displayName: user.displayName || user.name || user.email
+                };
+            }
+
+            function toProfileData(user) {
+                if (!user) return null;
+                return {
+                    uid: user.id,
+                    email: user.email,
+                    name: user.displayName,
+                    displayName: user.displayName,
+                    role: user.role,
+                    division: user.division || '',
+                    unit: user.unit || '',
+                    isAdmin: user.role === 'systemAdmin',
+                    profileCompleted: !!(user.division && user.unit)
+                };
+            }
+
+            const authShim = {
+                currentUser: null,
+                async createUserWithEmailAndPassword(email, password) {
+                    const displayName = document.getElementById('signup-name')?.value?.trim() || email;
+                    await apiFetch('/api/auth/register', {method: 'POST', body: {email, displayName, password}});
+                    const user = await apiFetch('/api/auth/login', {method: 'POST', body: {email, password}});
+                    this.currentUser = toFirebaseUser(user);
+                    listeners.forEach(cb => cb(this.currentUser));
+                    return {user: this.currentUser};
+                },
+                async signInWithEmailAndPassword(email, password) {
+                    const user = await apiFetch('/api/auth/login', {method: 'POST', body: {email, password}});
+                    this.currentUser = toFirebaseUser(user);
+                    listeners.forEach(cb => cb(this.currentUser));
+                    return {user: this.currentUser};
+                },
+                async signOut() {
+                    await apiFetch('/api/auth/logout', {method: 'POST'});
+                    this.currentUser = null;
+                    listeners.forEach(cb => cb(null));
+                },
+                async sendPasswordResetEmail() {
+                    throw new Error('Password reset must be handled by the NCA intranet administrator.');
+                },
+                onAuthStateChanged(callback) {
+                    listeners.push(callback);
+                    apiFetch('/api/auth/me')
+                        .then(user => {
+                            this.currentUser = toFirebaseUser(user);
+                            callback(this.currentUser);
+                        })
+                        .catch(() => {
+                            this.currentUser = null;
+                            callback(null);
+                        });
+                    return () => {
+                        const index = listeners.indexOf(callback);
+                        if (index >= 0) listeners.splice(index, 1);
+                    };
+                }
+            };
+
+            class ApiDocSnapshot {
+                constructor(id, data) {
+                    this.id = id;
+                    this.exists = !!data;
+                    this._data = data || null;
+                    this.ref = null;
+                }
+                data() { return this._data; }
+            }
+
+            class ApiQuerySnapshot {
+                constructor(docs) {
+                    this.docs = docs;
+                    this.size = docs.length;
+                }
+                forEach(callback) { this.docs.forEach(callback); }
+            }
+
+            class ApiDocument {
+                constructor(collectionName, id) {
+                    this.collectionName = collectionName;
+                    this.id = id;
+                }
+                async get() {
+                    if (this.collectionName === 'users') {
+                        const me = authShim.currentUser;
+                        if (me && this.id === me.uid) {
+                            const user = await apiFetch('/api/auth/me');
+                            const snap = new ApiDocSnapshot(this.id, toProfileData(user));
+                            snap.ref = this;
+                            return snap;
+                        }
+                        const users = await apiFetch('/api/users');
+                        const user = users.find(u => u.id === this.id);
+                        const snap = new ApiDocSnapshot(this.id, toProfileData(user));
+                        snap.ref = this;
+                        return snap;
+                    }
+
+                    if (this.collectionName === 'dashboards') {
+                        const me = authShim.currentUser;
+                        const data = me && this.id === me.uid
+                            ? await apiFetch('/api/dashboard/me')
+                            : await apiFetch('/api/dashboard/' + encodeURIComponent(this.id));
+                        const snap = new ApiDocSnapshot(this.id, data);
+                        snap.ref = this;
+                        return snap;
+                    }
+
+                    if (this.collectionName === 'units') {
+                        const units = await apiFetch('/api/units');
+                        const unit = units.find(u => u.id === this.id);
+                        const snap = new ApiDocSnapshot(this.id, unit ? Object.assign({docId: unit.id}, unit) : null);
+                        snap.ref = this;
+                        return snap;
+                    }
+
+                    return new ApiDocSnapshot(this.id, null);
+                }
+                async set(data) {
+                    if (this.collectionName === 'dashboards') {
+                        await apiFetch('/api/dashboard/me', {method: 'PUT', body: data});
+                        return;
+                    }
+
+                    if (this.collectionName === 'users') {
+                        const me = authShim.currentUser;
+                        if (data.division && data.unit && me && this.id === me.uid && (!data.role || data.role === 'employee')) {
+                            await apiFetch('/api/users/me/profile', {method: 'PATCH', body: {division: data.division, unit: data.unit}});
+                            return;
+                        }
+                        if (data.division && data.unit && data.role) {
+                            await apiFetch('/api/users/' + encodeURIComponent(this.id) + '/assignment', {
+                                method: 'PATCH',
+                                body: {division: data.division, unit: data.unit, role: data.role}
+                            });
+                        }
+                        return;
+                    }
+
+                    if (this.collectionName === 'units') {
+                        if (data.active === false) {
+                            await apiFetch('/api/units/' + encodeURIComponent(this.id) + '/archive', {method: 'PATCH'});
+                            return;
+                        }
+                        if (data.name && data.division) {
+                            await apiFetch('/api/units', {method: 'POST', body: {name: data.name, division: data.division}});
+                        }
+                    }
+                }
+                async delete() {
+                    if (this.collectionName === 'attachments') {
+                        await apiFetch('/api/attachments/' + encodeURIComponent(this.id), {method: 'DELETE'});
+                    }
+                }
+            }
+
+            class ApiCollection {
+                constructor(name, filters = []) {
+                    this.name = name;
+                    this.filters = filters;
+                }
+                doc(id) { return new ApiDocument(this.name, id); }
+                where(field, operator, value) {
+                    return new ApiCollection(this.name, this.filters.concat([{field, operator, value}]));
+                }
+                async get() {
+                    let rows = [];
+                    if (this.name === 'users') rows = (await apiFetch('/api/users')).map(toProfileData);
+                    if (this.name === 'units') rows = await apiFetch('/api/units');
+                    rows = rows.filter(row => this.filters.every(filter => filter.operator === '==' ? row[filter.field] === filter.value : true));
+                    const docs = rows.map(row => {
+                        const id = row.uid || row.id || row.docId;
+                        const snap = new ApiDocSnapshot(id, row);
+                        snap.ref = new ApiDocument(this.name, id);
+                        return snap;
+                    });
+                    return new ApiQuerySnapshot(docs);
+                }
+            }
+
+            function parseAttachmentPath(path) {
+                const match = String(path).match(/^attachments\/[^/]+\/objective-([^/]+)\/(action|kpi)-(\d+)\//);
+                return {
+                    objectiveId: match ? match[1] : 'unknown',
+                    taskType: match ? match[2] : 'action',
+                    taskIndex: match ? Number(match[3]) : 0
+                };
+            }
+
+            const storageShim = {
+                ref(path) {
+                    return {
+                        fullPath: path,
+                        async put(file) {
+                            const parsed = parseAttachmentPath(path);
+                            const form = new FormData();
+                            form.append('file', file);
+                            const query = new URLSearchParams({
+                                objectiveId: parsed.objectiveId,
+                                taskType: parsed.taskType,
+                                taskIndex: String(parsed.taskIndex)
+                            });
+                            const result = await apiFetch('/api/attachments?' + query.toString(), {
+                                method: 'POST',
+                                body: form,
+                                formData: true
+                            });
+                            this.fullPath = result.id;
+                            this.downloadUrl = result.downloadUrl;
+                            return {ref: this};
+                        },
+                        async getDownloadURL() {
+                            return this.downloadUrl || ('/api/attachments/' + encodeURIComponent(this.fullPath) + '/download');
+                        },
+                        async delete() {
+                            await apiFetch('/api/attachments/' + encodeURIComponent(this.fullPath), {method: 'DELETE'});
+                        }
+                    };
+                }
+            };
+
+            return {
+                initializeApp() { return {}; },
+                auth() { return authShim; },
+                firestore() {
+                    return {
+                        collection(name) { return new ApiCollection(name); },
+                        batch() {
+                            const ops = [];
+                            return {
+                                set(ref, data) { ops.push(() => ref.set(data)); },
+                                delete(ref) { ops.push(() => ref.delete()); },
+                                async commit() {
+                                    for (const op of ops) await op();
+                                }
+                            };
+                        }
+                    };
+                },
+                storage() { return storageShim; }
+            };
+        }
+
+        if (NCA_INTRAnet_API_MODE) {
+            window.firebase = createNcaApiFirebaseShim();
+            console.info('NCA intranet API mode active: Firebase calls are routed to /api.');
+        }
+
         // Your Firebase configuration - REPLACE WITH YOUR VALUES
         
 
@@ -2995,7 +3279,7 @@
                 name: file.name,
                 size: file.size,
                 type: file.type || 'application/octet-stream',
-                storagePath: path,
+                storagePath: snapshot.ref.fullPath || path,
                 url,
                 uploadedAt: new Date().toISOString()
             };

@@ -132,6 +132,47 @@ app.MapPost("/api/auth/login", async (LoginRequest request, NpgsqlDataSource db,
     return Results.Ok(ToUserResponse(user));
 });
 
+app.MapPost("/api/auth/register", async (RegisterRequest request, NpgsqlDataSource db, HttpContext http) =>
+{
+    if (request.Password.Length < 6) return Results.BadRequest(new { message = "Password must be at least 6 characters." });
+
+    await using var conn = await db.OpenConnectionAsync();
+    if (await FindUserByEmailAsync(conn, request.Email) is not null)
+    {
+        return Results.Conflict(new { message = "An account already exists for this email." });
+    }
+
+    var password = PasswordHasher.Hash(request.Password);
+    var id = Guid.NewGuid();
+    await using var tx = await conn.BeginTransactionAsync();
+    await using (var cmd = new NpgsqlCommand("""
+        insert into users (id, email, display_name, role, division, unit, password_hash, password_salt, password_iterations, is_active)
+        values (@id, @email, @displayName, 'employee', null, null, @hash, @salt, @iterations, true)
+        """, conn, tx))
+    {
+        cmd.Parameters.AddWithValue("id", id);
+        cmd.Parameters.AddWithValue("email", request.Email.Trim().ToLowerInvariant());
+        cmd.Parameters.AddWithValue("displayName", request.DisplayName.Trim());
+        cmd.Parameters.AddWithValue("hash", password.Hash);
+        cmd.Parameters.AddWithValue("salt", password.Salt);
+        cmd.Parameters.AddWithValue("iterations", password.Iterations);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    await using (var dashCmd = new NpgsqlCommand("""
+        insert into dashboards (user_id, data)
+        values (@userId, '{"objectivesData":[]}'::jsonb)
+        """, conn, tx))
+    {
+        dashCmd.Parameters.AddWithValue("userId", id);
+        await dashCmd.ExecuteNonQueryAsync();
+    }
+
+    await AuditAsync(conn, id, "auth.register", "users", id.ToString(), http.Connection.RemoteIpAddress?.ToString(), tx);
+    await tx.CommitAsync();
+    return Results.Created($"/api/users/{id}", new { id, email = request.Email, role = "employee" });
+});
+
 app.MapPost("/api/auth/logout", async (HttpContext http) =>
 {
     await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
@@ -172,6 +213,20 @@ app.MapPut("/api/dashboard/me", async (JsonElement dashboardData, HttpContext ht
     await cmd.ExecuteNonQueryAsync();
     await AuditAsync(conn, userId, "dashboard.save", "dashboards", userId.ToString(), http.Connection.RemoteIpAddress?.ToString());
     return Results.NoContent();
+}).RequireAuthorization();
+
+app.MapGet("/api/dashboard/{userId:guid}", async (Guid userId, HttpContext http, NpgsqlDataSource db) =>
+{
+    await using var conn = await db.OpenConnectionAsync();
+    var currentUser = await FindUserByIdAsync(conn, http.User.UserId());
+    var targetUser = await FindUserByIdAsync(conn, userId);
+    if (currentUser is null || targetUser is null) return Results.NotFound();
+    if (currentUser.Id != targetUser.Id && !currentUser.CanManageUser(targetUser)) return Results.Forbid();
+
+    await using var cmd = new NpgsqlCommand("select data from dashboards where user_id = @userId", conn);
+    cmd.Parameters.AddWithValue("userId", userId);
+    var data = await cmd.ExecuteScalarAsync();
+    return data is null || data is DBNull ? Results.Ok(new { objectivesData = Array.Empty<object>() }) : Results.Text(data.ToString()!, "application/json");
 }).RequireAuthorization();
 
 app.MapGet("/api/users", async (HttpContext http, NpgsqlDataSource db) =>
@@ -232,6 +287,27 @@ app.MapPatch("/api/users/{userId:guid}/assignment", async (
     return Results.NoContent();
 }).RequireAuthorization();
 
+app.MapPatch("/api/users/me/profile", async (
+    SelfProfileRequest request,
+    HttpContext http,
+    NpgsqlDataSource db) =>
+{
+    var userId = http.User.UserId();
+    await using var conn = await db.OpenConnectionAsync();
+    await using var cmd = new NpgsqlCommand("""
+        update users
+        set division = @division, unit = @unit, updated_at = now()
+        where id = @id and role = 'employee'
+        """, conn);
+    cmd.Parameters.AddWithValue("id", userId);
+    cmd.Parameters.AddWithValue("division", request.Division);
+    cmd.Parameters.AddWithValue("unit", request.Unit);
+    var changed = await cmd.ExecuteNonQueryAsync();
+    if (changed == 0) return Results.Forbid();
+    await AuditAsync(conn, userId, "user.profile.self_update", "users", userId.ToString(), http.Connection.RemoteIpAddress?.ToString());
+    return Results.NoContent();
+}).RequireAuthorization();
+
 app.MapGet("/api/units", async (string? division, NpgsqlDataSource db) =>
 {
     await using var conn = await db.OpenConnectionAsync();
@@ -270,6 +346,27 @@ app.MapPost("/api/units", async (UnitCreateRequest request, HttpContext http, Np
     await cmd.ExecuteNonQueryAsync();
     await AuditAsync(conn, currentUser.Id, "unit.upsert", "units", request.Name, http.Connection.RemoteIpAddress?.ToString());
     return Results.Ok(new { id, request.Name, request.Division });
+}).RequireAuthorization();
+
+app.MapPatch("/api/units/{unitId:guid}/archive", async (Guid unitId, HttpContext http, NpgsqlDataSource db) =>
+{
+    await using var conn = await db.OpenConnectionAsync();
+    var currentUser = await FindUserByIdAsync(conn, http.User.UserId());
+    if (currentUser is null) return Results.Unauthorized();
+
+    await using (var lookup = new NpgsqlCommand("select division from units where id = @id", conn))
+    {
+        lookup.Parameters.AddWithValue("id", unitId);
+        var division = await lookup.ExecuteScalarAsync();
+        if (division is null) return Results.NotFound();
+        if (!currentUser.CanManageDivision((string)division)) return Results.Forbid();
+    }
+
+    await using var cmd = new NpgsqlCommand("update units set active = false where id = @id", conn);
+    cmd.Parameters.AddWithValue("id", unitId);
+    await cmd.ExecuteNonQueryAsync();
+    await AuditAsync(conn, currentUser.Id, "unit.archive", "units", unitId.ToString(), http.Connection.RemoteIpAddress?.ToString());
+    return Results.NoContent();
 }).RequireAuthorization();
 
 app.MapPost("/api/attachments", async (
@@ -415,12 +512,12 @@ static UserResponse ToUserResponse(UserRecord user) => new(
     user.CreatedAt,
     user.UpdatedAt);
 
-static async Task AuditAsync(NpgsqlConnection conn, Guid? userId, string action, string entityType, string entityId, string? ipAddress)
+static async Task AuditAsync(NpgsqlConnection conn, Guid? userId, string action, string entityType, string entityId, string? ipAddress, NpgsqlTransaction? tx = null)
 {
     await using var cmd = new NpgsqlCommand("""
         insert into audit_logs (user_id, action, entity_type, entity_id, ip_address)
         values (@userId, @action, @entityType, @entityId, @ipAddress)
-        """, conn);
+        """, conn, tx);
     cmd.Parameters.AddWithValue("userId", userId.HasValue ? userId.Value : DBNull.Value);
     cmd.Parameters.AddWithValue("action", action);
     cmd.Parameters.AddWithValue("entityType", entityType);
@@ -496,8 +593,10 @@ record UserRecord(
 record AttachmentRecord(Guid Id, Guid OwnerUserId, string OriginalFileName, string ContentType, long SizeBytes, string StoragePath);
 
 record BootstrapAdminRequest(string BootstrapKey, string Email, string DisplayName, string Password, string? Division, string? Unit);
+record RegisterRequest(string Email, string DisplayName, string Password);
 record LoginRequest(string Email, string Password);
 record AssignmentRequest(string Division, string Unit, string Role);
+record SelfProfileRequest(string Division, string Unit);
 record UnitCreateRequest(string Name, string Division);
 record UserResponse(Guid Id, string Email, string DisplayName, string Role, string? Division, string? Unit, bool IsActive, DateTime CreatedAt, DateTime UpdatedAt);
 record UnitResponse(Guid Id, string Name, string Division, bool Active);
