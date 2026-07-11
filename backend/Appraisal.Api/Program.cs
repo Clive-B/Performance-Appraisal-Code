@@ -189,6 +189,35 @@ app.MapGet("/api/auth/me", async (HttpContext http, NpgsqlDataSource db) =>
 
 app.MapGet("/api/auth/forbidden", () => Results.Forbid());
 
+app.MapPost("/api/auth/change-password", async (ChangePasswordRequest request, HttpContext http, NpgsqlDataSource db) =>
+{
+    if (request.NewPassword.Length < 8) return Results.BadRequest(new { message = "New password must be at least 8 characters." });
+    if (request.CurrentPassword == request.NewPassword) return Results.BadRequest(new { message = "New password must be different from the current password." });
+
+    var userId = http.User.UserId();
+    await using var conn = await db.OpenConnectionAsync();
+    var user = await FindUserByIdAsync(conn, userId);
+    if (user is null || !user.IsActive) return Results.Unauthorized();
+    if (!PasswordHasher.Verify(request.CurrentPassword, user.PasswordHash, user.PasswordSalt, user.PasswordIterations))
+    {
+        return Results.BadRequest(new { message = "Current password is incorrect." });
+    }
+
+    var password = PasswordHasher.Hash(request.NewPassword);
+    await using var cmd = new NpgsqlCommand("""
+        update users
+        set password_hash = @hash, password_salt = @salt, password_iterations = @iterations, updated_at = now()
+        where id = @id
+        """, conn);
+    cmd.Parameters.AddWithValue("id", userId);
+    cmd.Parameters.AddWithValue("hash", password.Hash);
+    cmd.Parameters.AddWithValue("salt", password.Salt);
+    cmd.Parameters.AddWithValue("iterations", password.Iterations);
+    await cmd.ExecuteNonQueryAsync();
+    await AuditAsync(conn, userId, "auth.password.change", "users", userId.ToString(), http.Connection.RemoteIpAddress?.ToString());
+    return Results.NoContent();
+}).RequireAuthorization();
+
 app.MapGet("/api/dashboard/me", async (HttpContext http, NpgsqlDataSource db) =>
 {
     var userId = http.User.UserId();
@@ -343,6 +372,35 @@ app.MapPatch("/api/users/{userId:guid}/assignment", async (
     cmd.Parameters.AddWithValue("role", request.Role);
     await cmd.ExecuteNonQueryAsync();
     await AuditAsync(conn, currentUser.Id, "user.assignment.update", "users", userId.ToString(), http.Connection.RemoteIpAddress?.ToString());
+    return Results.NoContent();
+}).RequireAuthorization();
+
+app.MapPatch("/api/users/{userId:guid}/password", async (
+    Guid userId,
+    ResetUserPasswordRequest request,
+    HttpContext http,
+    NpgsqlDataSource db) =>
+{
+    if (request.NewPassword.Length < 8) return Results.BadRequest(new { message = "Temporary password must be at least 8 characters." });
+
+    await using var conn = await db.OpenConnectionAsync();
+    var currentUser = await FindUserByIdAsync(conn, http.User.UserId());
+    var targetUser = await FindUserByIdAsync(conn, userId);
+    if (currentUser is null || targetUser is null) return Results.NotFound();
+    if (!currentUser.CanManageUser(targetUser)) return Results.Forbid();
+
+    var password = PasswordHasher.Hash(request.NewPassword);
+    await using var cmd = new NpgsqlCommand("""
+        update users
+        set password_hash = @hash, password_salt = @salt, password_iterations = @iterations, updated_at = now()
+        where id = @id
+        """, conn);
+    cmd.Parameters.AddWithValue("id", userId);
+    cmd.Parameters.AddWithValue("hash", password.Hash);
+    cmd.Parameters.AddWithValue("salt", password.Salt);
+    cmd.Parameters.AddWithValue("iterations", password.Iterations);
+    await cmd.ExecuteNonQueryAsync();
+    await AuditAsync(conn, currentUser.Id, "user.password.reset", "users", userId.ToString(), http.Connection.RemoteIpAddress?.ToString());
     return Results.NoContent();
 }).RequireAuthorization();
 
@@ -654,8 +712,10 @@ record AttachmentRecord(Guid Id, Guid OwnerUserId, string OriginalFileName, stri
 record BootstrapAdminRequest(string BootstrapKey, string Email, string DisplayName, string Password, string? Division, string? Unit);
 record RegisterRequest(string Email, string DisplayName, string Password);
 record LoginRequest(string Email, string Password);
+record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 record UserCreateRequest(string Email, string DisplayName, string Password, string Division, string Unit, string Role);
 record AssignmentRequest(string Division, string Unit, string Role);
+record ResetUserPasswordRequest(string NewPassword);
 record SelfProfileRequest(string Division, string Unit);
 record UnitCreateRequest(string Name, string Division);
 record UserResponse(Guid Id, string Email, string DisplayName, string Role, string? Division, string? Unit, bool IsActive, DateTime CreatedAt, DateTime UpdatedAt);

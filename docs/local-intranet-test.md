@@ -66,6 +66,8 @@ admin@nca.gov
 ChangeThisPassword!
 ```
 
+Users can change their own password from the dashboard user menu. Authorized managers can reset a selected user's temporary password from Organization Management.
+
 ## Smoke Test
 
 After the API is running and the first admin exists, run:
